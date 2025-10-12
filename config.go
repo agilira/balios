@@ -1,0 +1,103 @@
+// config.go: configuration for Balios
+//
+// Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira library
+// SPDX-License-Identifier: MPL-2.0
+
+package balios
+
+import (
+	"time"
+
+	"github.com/agilira/go-timecache"
+)
+
+// Config holds configuration parameters for the cache.
+type Config struct {
+	// MaxSize is the maximum number of entries the cache can hold.
+	// Must be > 0. Default: DefaultMaxSize.
+	MaxSize int
+
+	// WindowRatio is the ratio of window cache to total cache size.
+	// Must be between 0.0 and 1.0. Default: DefaultWindowRatio.
+	WindowRatio float64
+
+	// CounterBits is the number of bits per counter in the frequency sketch.
+	// Must be between 1 and 8. Default: DefaultCounterBits.
+	CounterBits int
+
+	// TTL is the time-to-live for cache entries.
+	// If 0, entries never expire. Default: 0 (no expiration).
+	TTL time.Duration
+
+	// CleanupInterval is how often to run cleanup of expired entries.
+	// Only used if TTL > 0. Default: TTL / 10.
+	CleanupInterval time.Duration
+
+	// Logger is used for debugging and monitoring.
+	// If nil, NoOpLogger is used. Default: NoOpLogger.
+	Logger Logger
+
+	// TimeProvider provides current time for TTL calculations.
+	// If nil, a default implementation is used. Default: system time.
+	TimeProvider TimeProvider
+
+	// OnEvict is called when an entry is evicted from the cache.
+	// This callback must be fast and non-blocking.
+	OnEvict func(key string, value interface{})
+
+	// OnExpire is called when an entry expires (TTL-based removal).
+	// This callback must be fast and non-blocking.
+	OnExpire func(key string, value interface{})
+}
+
+// Validate checks if the configuration is valid and sets defaults.
+func (c *Config) Validate() error {
+	if c.MaxSize <= 0 {
+		c.MaxSize = DefaultMaxSize
+	}
+
+	if c.WindowRatio <= 0 || c.WindowRatio >= 1 {
+		c.WindowRatio = DefaultWindowRatio
+	}
+
+	if c.CounterBits < 1 || c.CounterBits > 8 {
+		c.CounterBits = DefaultCounterBits
+	}
+
+	if c.TTL > 0 && c.CleanupInterval <= 0 {
+		c.CleanupInterval = c.TTL / 10
+		if c.CleanupInterval < time.Second {
+			c.CleanupInterval = time.Second
+		}
+	}
+
+	if c.Logger == nil {
+		c.Logger = NoOpLogger{}
+	}
+
+	if c.TimeProvider == nil {
+		c.TimeProvider = &systemTimeProvider{}
+	}
+
+	return nil
+}
+
+// DefaultConfig returns a configuration with sensible defaults.
+func DefaultConfig() Config {
+	return Config{
+		MaxSize:      DefaultMaxSize,
+		WindowRatio:  DefaultWindowRatio,
+		CounterBits:  DefaultCounterBits,
+		Logger:       NoOpLogger{},
+		TimeProvider: &systemTimeProvider{},
+	}
+}
+
+// systemTimeProvider is the default time provider using go-timecache.
+// This provides ~121x faster time access compared to time.Now() with zero allocations.
+type systemTimeProvider struct{}
+
+func (t *systemTimeProvider) Now() int64 {
+	return timecache.CachedTimeNano()
+}

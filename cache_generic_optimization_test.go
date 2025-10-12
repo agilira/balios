@@ -110,7 +110,7 @@ func BenchmarkKeyToString_Uint64(b *testing.B) {
 // BenchmarkGenericCache_OptimizedStringSet benchmarks optimized string key Set
 func BenchmarkGenericCache_OptimizedStringSet(b *testing.B) {
 	cache := NewGenericCache[string, int](Config{MaxSize: 10000})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -121,7 +121,7 @@ func BenchmarkGenericCache_OptimizedStringSet(b *testing.B) {
 // BenchmarkGenericCache_OptimizedStringGet benchmarks optimized string key Get
 func BenchmarkGenericCache_OptimizedStringGet(b *testing.B) {
 	cache := NewGenericCache[string, int](Config{MaxSize: 10000})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	cache.Set("key", 42)
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -133,7 +133,7 @@ func BenchmarkGenericCache_OptimizedStringGet(b *testing.B) {
 // BenchmarkGenericCache_OptimizedIntSet benchmarks optimized int key Set
 func BenchmarkGenericCache_OptimizedIntSet(b *testing.B) {
 	cache := NewGenericCache[int, string](Config{MaxSize: 10000})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -144,7 +144,7 @@ func BenchmarkGenericCache_OptimizedIntSet(b *testing.B) {
 // BenchmarkGenericCache_OptimizedIntGet benchmarks optimized int key Get
 func BenchmarkGenericCache_OptimizedIntGet(b *testing.B) {
 	cache := NewGenericCache[int, string](Config{MaxSize: 10000})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	cache.Set(42, "value")
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -156,7 +156,7 @@ func BenchmarkGenericCache_OptimizedIntGet(b *testing.B) {
 // BenchmarkGenericCache_OptimizedInt64Set benchmarks optimized int64 key Set
 func BenchmarkGenericCache_OptimizedInt64Set(b *testing.B) {
 	cache := NewGenericCache[int64, string](Config{MaxSize: 10000})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -167,7 +167,7 @@ func BenchmarkGenericCache_OptimizedInt64Set(b *testing.B) {
 // BenchmarkGenericCache_OptimizedInt64Get benchmarks optimized int64 key Get
 func BenchmarkGenericCache_OptimizedInt64Get(b *testing.B) {
 	cache := NewGenericCache[int64, string](Config{MaxSize: 10000})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 	cache.Set(int64(42), "value")
 	b.ReportAllocs()
 	b.ResetTimer()

@@ -40,7 +40,7 @@ func TestNewHotConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHotConfig failed: %v", err)
 	}
-	defer hc.Stop()
+	defer func() { _ = hc.Stop() }()
 
 	if hc == nil {
 		t.Fatal("Expected non-nil HotConfig")
@@ -100,7 +100,9 @@ func TestHotConfig_StartStop(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Stop watching
-	hc.Stop()
+	if err := hc.Stop(); err != nil {
+		t.Errorf("Failed to stop: %v", err)
+	}
 }
 
 // TestHotConfig_ConfigReload tests configuration hot reload
@@ -141,7 +143,7 @@ func TestHotConfig_ConfigReload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHotConfig failed: %v", err)
 	}
-	defer hc.Stop()
+	defer func() { _ = hc.Stop() }()
 
 	// Note: UniversalConfigWatcherWithConfig auto-starts the watcher
 	if err := hc.Start(); err != nil {
@@ -186,8 +188,8 @@ func TestHotConfig_ConfigReload(t *testing.T) {
 
 	// Force filesystem sync to ensure mtime is updated
 	if file, err := os.Open(configPath); err == nil {
-		file.Sync()
-		file.Close()
+		_ = file.Sync()
+		_ = file.Close()
 	}
 
 	// Wait for reload with generous timeout
@@ -243,7 +245,7 @@ func TestHotConfig_GetConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHotConfig failed: %v", err)
 	}
-	defer hc.Stop()
+	defer func() { _ = hc.Stop() }()
 
 	// GetConfig should work before Start
 	cfg := hc.GetConfig()
@@ -280,7 +282,7 @@ func TestHotConfig_ParseConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHotConfig failed: %v", err)
 	}
-	defer hc.Stop()
+	defer func() { _ = hc.Stop() }()
 
 	tests := []struct {
 		name   string
@@ -379,7 +381,7 @@ func TestHotConfig_JSONFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHotConfig failed: %v", err)
 	}
-	defer hc.Stop()
+	defer func() { _ = hc.Stop() }()
 
 	if err := hc.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
@@ -415,7 +417,7 @@ func BenchmarkHotConfig_GetConfig(b *testing.B) {
 	if err != nil {
 		b.Fatalf("NewHotConfig failed: %v", err)
 	}
-	defer hc.Stop()
+	defer func() { _ = hc.Stop() }()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

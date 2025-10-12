@@ -108,6 +108,7 @@ func TestGenericCache_GetOrLoad_PointerValue(t *testing.T) {
 	}
 	if value == nil {
 		t.Error("Expected non-nil pointer")
+		return
 	}
 	if value.Value != "test" {
 		t.Errorf("Expected 'test', got: %v", value.Value)

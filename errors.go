@@ -1,3 +1,12 @@
+// errors.go: comprehensive error handling for balios cache operations
+//
+// This file provides structured error types using the go-errors library,
+// enabling rich error context, categorization, and standardized error codes
+// for all cache operations.
+//
+// Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira library
+// SPDX-License-Identifier: MPL-2.0
 package balios
 
 import (

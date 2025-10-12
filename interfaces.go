@@ -1,4 +1,4 @@
-// interface.go: public interfaces for Balios
+// interfaces.go: public interfaces for Balios
 //
 // Copyright (c) 2025 AGILira - A. Giordano
 // Series: an AGILira library
@@ -108,9 +108,16 @@ type Logger interface {
 // NoOpLogger is a logger that does nothing. Used as default to avoid nil checks.
 type NoOpLogger struct{}
 
+// Debug does nothing (no-op implementation).
 func (NoOpLogger) Debug(msg string, keyvals ...interface{}) {}
-func (NoOpLogger) Info(msg string, keyvals ...interface{})  {}
-func (NoOpLogger) Warn(msg string, keyvals ...interface{})  {}
+
+// Info does nothing (no-op implementation).
+func (NoOpLogger) Info(msg string, keyvals ...interface{}) {}
+
+// Warn does nothing (no-op implementation).
+func (NoOpLogger) Warn(msg string, keyvals ...interface{}) {}
+
+// Error does nothing (no-op implementation).
 func (NoOpLogger) Error(msg string, keyvals ...interface{}) {}
 
 // TimeProvider provides current time with caching for performance.

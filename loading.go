@@ -1,3 +1,12 @@
+// loading.go: GetOrLoad implementation with singleflight pattern
+//
+// This file implements the GetOrLoad and GetOrLoadWithContext methods,
+// providing cache-aside pattern with automatic deduplication of concurrent
+// loads using a singleflight mechanism.
+//
+// Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira library
+// SPDX-License-Identifier: MPL-2.0
 package balios
 
 import (

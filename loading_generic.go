@@ -1,3 +1,11 @@
+// loading_generic.go: type-safe GetOrLoad implementation with generics
+//
+// This file provides generic versions of GetOrLoad and GetOrLoadWithContext,
+// enabling type-safe cache-aside pattern without type assertions.
+//
+// Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira library
+// SPDX-License-Identifier: MPL-2.0
 package balios
 
 import "context"

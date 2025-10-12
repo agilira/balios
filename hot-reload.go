@@ -1,4 +1,4 @@
-// hotconfig.go: dynamic configuration with Argus integration
+// hot-reload.go: dynamic configuration with Argus integration
 //
 // Copyright (c) 2025 AGILira - A. Giordano
 // Series: an AGILira library

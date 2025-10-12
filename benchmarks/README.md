@@ -2,7 +2,7 @@
 
 Comprehensive benchmark suite comparing Balios against the best Go caches: **Otter** and **Ristretto**.
 
-## 🎯 Benchmark Categories
+## Benchmark Categories
 
 ### 1. **Single-Threaded Benchmarks**
 Pure performance without contention:
@@ -31,7 +31,7 @@ Different cache capacities:
 Measures cache effectiveness (not a benchmark):
 - `TestHitRatio` - Calculates hit percentage under Zipf distribution
 
-## 🚀 Running Benchmarks
+## Running Benchmarks
 
 ### Quick Test
 ```bash
@@ -69,7 +69,7 @@ go test -bench=Parallel -benchmem
 go test -run=TestHitRatio -v
 ```
 
-## 📊 Understanding Results
+## Understanding Results
 
 ### Throughput
 ```
@@ -91,14 +91,14 @@ Lower ns/op = faster operations
 ```
 Tests scalability across different core counts.
 
-## 🎲 Zipf Distribution
+## Zipf Distribution
 
 All benchmarks use **Zipf distribution** (α=1.0) to simulate realistic access patterns:
 - Some keys are accessed much more frequently (hot keys)
 - Power law distribution mimics real-world caching scenarios
 - Standard benchmark approach used by Caffeine, Otter, etc.
 
-## 🏆 Performance Targets
+## Performance Targets
 
 ### Balios Goals vs Competitors
 
@@ -110,7 +110,7 @@ All benchmarks use **Zipf distribution** (α=1.0) to simulate realistic access p
 | Hit Ratio | ~48% | ~46% | **>48%** |
 | Allocations | 0-1/op | 1-2/op | **0/op** |
 
-## 🔍 Analysis Tips
+## Analysis Tips
 
 ### Compare Throughput
 ```bash
@@ -139,7 +139,7 @@ go test -bench=. -count=10 > new.txt
 benchstat old.txt new.txt
 ```
 
-## 📈 Benchmark Strategy
+## Benchmark Strategy
 
 1. **Establish Baseline**: Run all benchmarks to get current state
 2. **Identify Bottlenecks**: Find where Balios lags behind
@@ -148,7 +148,7 @@ benchstat old.txt new.txt
 5. **Compare**: Use benchstat to validate improvements
 6. **Iterate**: Repeat until goals achieved
 
-## 🎯 What to Focus On
+## What to Focus On
 
 ### High Priority
 - **Parallel benchmarks**: Shows real-world concurrent performance
@@ -180,14 +180,14 @@ const (
 )
 ```
 
-## 📝 Notes
+## Notes
 
 - **Ristretto buffering**: May show artificially high Set() performance due to async processing
 - **Warmup**: All benchmarks pre-populate cache to simulate steady-state
 - **Fair comparison**: All caches configured with equivalent capacity
 - **Realistic workload**: Zipf distribution matches real-world access patterns
 
-## 🎬 Next Steps
+## Next Steps
 
 After running benchmarks:
 1. Document baseline performance in `study/ANALYSIS.md`
@@ -196,7 +196,7 @@ After running benchmarks:
 4. Implement improvements
 5. Re-benchmark to validate
 
-## 🏁 Quick Start
+## Quick Start
 
 ```bash
 # Run full benchmark suite (5 minutes)
@@ -208,3 +208,6 @@ go test -run=TestHitRatio -v
 # Compare with previous run
 benchstat baseline.txt results.txt
 ```
+---
+
+Balios • an AGILira fragment

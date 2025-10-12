@@ -338,3 +338,7 @@ if balios.IsNotFound(err) {
 - [go-errors Documentation](https://github.com/agilira/go-errors)
 - [Balios API Reference](API.md)
 - [Error Handling Best Practices](https://go.dev/blog/error-handling-and-go)
+
+---
+
+Balios • an AGILira fragment

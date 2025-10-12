@@ -281,16 +281,6 @@ go test -run TestHitRatioExtended -v
 go test -race -bench=. -benchmem
 ```
 
-## Performance Roadmap
-
-Planned optimizations (Phase 4+):
-
-1. **SIMD hash functions**: Potential 2x hash speedup
-2. **Tiered storage**: Hot entries in L1 cache
-3. **Async eviction**: Background eviction thread
-4. **Adaptive sizing**: Auto-tune MaxSize based on hit ratio
-5. **NUMA awareness**: Pin entries to CPU sockets
-
 ## Conclusion
 
 Balios delivers:
@@ -308,3 +298,7 @@ Balios delivers:
 - Hit ratio tests: `benchmarks/hitratio_test.go`
 - Loading benchmarks: `loading_bench_test.go`
 - Architecture: `docs/ARCHITECTURE.md`
+
+---
+
+Balios • an AGILira fragment

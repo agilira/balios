@@ -350,13 +350,13 @@ go test -race ./...
 - **Prometheus**: v2.30.0+
 - **Grafana**: v8.0.0+
 
-## License
-
-Same as balios core (see main repository LICENSE).
-
 ## Related
 
 - [balios core](../) - Main cache implementation
 - [Architecture docs](../docs/ARCHITECTURE.md) - W-TinyLFU internals
 - [Performance docs](../docs/PERFORMANCE.md) - Benchmark results
 - [Examples](../examples/) - Complete working examples
+
+---
+
+Balios • an AGILira fragment

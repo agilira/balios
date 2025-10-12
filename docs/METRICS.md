@@ -619,3 +619,7 @@ Choose the monitoring solution that fits your needs:
 - **No monitoring**: Default NoOp (zero overhead)
 - **OpenTelemetry**: Use `balios/otel` package (industry standard)
 - **Custom**: Implement MetricsCollector interface
+
+---
+
+Balios • an AGILira fragment

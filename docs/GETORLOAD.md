@@ -9,7 +9,7 @@ The `GetOrLoad()` API provides automatic value loading with **singleflight patte
 ## The Problem: Cache Stampede
 
 ```go
-// ❌ WRONG: Without GetOrLoad
+// WRONG: Without GetOrLoad
 func getUser(id int) (User, error) {
     // 1000 concurrent requests for same missing key
     if user, found := cache.Get(id); found {
@@ -32,7 +32,7 @@ func getUser(id int) (User, error) {
 ## The Solution: Singleflight
 
 ```go
-// ✅ CORRECT: With GetOrLoad
+// CORRECT: With GetOrLoad
 func getUser(id int) (User, error) {
     // Only ONE goroutine executes loader
     // Others wait and receive the same result
@@ -177,29 +177,29 @@ func demonstrateSingleflight() {
             })
             
             if err != nil {
-                fmt.Printf("❌ Goroutine %d failed: %v\n", goroutineID, err)
+                fmt.Printf("Goroutine %d failed: %v\n", goroutineID, err)
                 return
             }
             
-            fmt.Printf("✅ Goroutine %d got user: %s\n", goroutineID, user.Name)
+            fmt.Printf("Goroutine %d got user: %s\n", goroutineID, user.Name)
         }(i)
     }
     
     wg.Wait()
     elapsed := time.Since(start)
     
-    fmt.Printf("✅ All %d requests completed in %v\n", numGoroutines, elapsed)
-    fmt.Println("🎯 Database accessed only ONCE (not 100 times!) thanks to singleflight")
+    fmt.Printf("All %d requests completed in %v\n", numGoroutines, elapsed)
+    fmt.Println("Database accessed only ONCE (not 100 times!) thanks to singleflight")
 }
 ```
 
 **Expected Output:**
 ```
-✅ Goroutine 0 got user: User200
-✅ Goroutine 1 got user: User200
+Goroutine 0 got user: User200
+Goroutine 1 got user: User200
 ... (98 more)
-✅ All 100 requests completed in 101ms
-🎯 Database accessed only ONCE (not 100 times!) thanks to singleflight
+All 100 requests completed in 101ms
+Database accessed only ONCE (not 100 times!) thanks to singleflight
 ```
 
 ### Example 3: Context with Timeout
@@ -222,7 +222,7 @@ func contextWithTimeout() {
         })
     
     if err != nil {
-        fmt.Printf("❌ Expected timeout error: %v\n", err)
+        fmt.Printf("Expected timeout error: %v\n", err)
     }
     
     // Attempt 2: Timeout sufficient (200ms > 100ms DB latency)
@@ -238,7 +238,7 @@ func contextWithTimeout() {
         panic(err)
     }
     
-    fmt.Printf("✅ Success with longer timeout: %s\n", user.Name)
+    fmt.Printf("Success with longer timeout: %s\n", user.Name)
 }
 ```
 
@@ -257,7 +257,7 @@ func contextCancellation() {
     // Start loading in background
     go func() {
         time.Sleep(50 * time.Millisecond)
-        fmt.Println("🛑 Cancelling context...")
+        fmt.Println("Cancelling context...")
         cancel()
     }()
     
@@ -289,7 +289,7 @@ func errorHandling() {
     })
     
     if err != nil {
-        fmt.Printf("✅ Error properly propagated: %v\n", err)
+        fmt.Printf("Error properly propagated: %v\n", err)
     }
     
     // Test 2: Nil loader (validation error)
@@ -297,7 +297,7 @@ func errorHandling() {
     _, err = cache2.GetOrLoad("key", nil)
     
     if err != nil {
-        fmt.Printf("✅ Validation error: %v\n", err)
+        fmt.Printf("Validation error: %v\n", err)
     }
     
     // Test 3: Loader panics (should recover)
@@ -306,11 +306,11 @@ func errorHandling() {
     })
     
     if err != nil {
-        fmt.Printf("✅ Panic recovered: %v\n", err)
+        fmt.Printf("Panic recovered: %v\n", err)
         
         // Check for panic recovered error code
         if errors.HasCode(err, balios.ErrCodePanicRecovered) {
-            fmt.Println("✅ Correct error code: BALIOS_PANIC_RECOVERED")
+            fmt.Println("Correct error code: BALIOS_PANIC_RECOVERED")
         }
     }
 }
@@ -456,7 +456,7 @@ val, err := loader()
 
 ## Best Practices
 
-### ✅ Do
+### Do
 
 1. **Use GetOrLoad for expensive operations**
    ```go
@@ -486,11 +486,11 @@ val, err := loader()
    }
    ```
 
-### ❌ Don't
+### Don't
 
 1. **Don't use GetOrLoad for cheap operations**
    ```go
-   // ❌ WRONG: Loader is trivial
+   // WRONG: Loader is trivial
    val, _ := cache.GetOrLoad(key, func() (int, error) {
        return 42, nil  // Just use Set() instead!
    })
@@ -498,7 +498,7 @@ val, err := loader()
 
 2. **Don't cache errors intentionally**
    ```go
-   // ❌ WRONG: Errors aren't cached anyway
+   // WRONG: Errors aren't cached anyway
    _, err := cache.GetOrLoad(key, loader)
    if err != nil {
        // Don't try to cache errors manually
@@ -508,13 +508,13 @@ val, err := loader()
 
 3. **Don't ignore context in loader**
    ```go
-   // ❌ WRONG: Loader ignores context
+   // WRONG: Loader ignores context
    cache.GetOrLoadWithContext(ctx, key, func(ctx context.Context) (V, error) {
        // Ignoring ctx parameter!
        return slowOperation()
    })
    
-   // ✅ CORRECT: Respect context
+   // CORRECT: Respect context
    cache.GetOrLoadWithContext(ctx, key, func(ctx context.Context) (V, error) {
        return slowOperationWithContext(ctx)
    })
@@ -601,14 +601,14 @@ go run main.go
 ### Optimize Loader Performance
 
 ```go
-// ❌ WRONG: Loader does unnecessary work
+// WRONG: Loader does unnecessary work
 cache.GetOrLoad(key, func() (User, error) {
     user := fetchFromDB(key)  // Slow
     enrichUser(&user)         // Even slower!
     return user, nil
 })
 
-// ✅ BETTER: Lazy enrichment
+// BETTER: Lazy enrichment
 cache.GetOrLoad(key, func() (User, error) {
     return fetchFromDB(key), nil  // Fast as possible
 })
@@ -643,21 +643,13 @@ for _, id := range userIDs {
 
 wg.Wait()
 ```
-
-## Conclusion
-
-GetOrLoad provides:
-- ✅ **Cache stampede prevention** (1000x efficiency)
-- ✅ **Zero overhead** on cache hits (20.3 ns/op)
-- ✅ **Context support** (timeout/cancellation)
-- ✅ **Panic recovery** (graceful error handling)
-- ✅ **Race-free** (all tests pass with `-race`)
-
-Use it for all expensive operations that benefit from caching!
-
 ## References
 
 - Implementation: `loading.go`, `loading_generic.go`
 - Tests: `loading_test.go`, `loading_generic_test.go`
 - Benchmarks: `loading_bench_test.go`
 - Example: `examples/getorload/main.go`
+
+---
+
+Balios • an AGILira fragment

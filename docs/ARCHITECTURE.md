@@ -319,6 +319,6 @@ Planned features (see Development Status in main README):
 - Count-Min Sketch: "An improved data stream summary: the count-min sketch" (2004)
 - Frequency Sketch Implementation: Based on Caffeine (Java) and Otter (Go)
 
-## License
+---
 
-MPL-2.0 - See LICENSE file for details.
+Balios • an AGILira fragment

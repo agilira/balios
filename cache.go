@@ -10,13 +10,13 @@ import (
 	"sync/atomic"
 )
 
-// entry represents a cache entry with atomic access
+// entry represents a cache entry with atomic access.
 type entry struct {
 	key      string
-	value    interface{}
+	value    atomic.Value // Thread-safe value storage
 	keyHash  uint64
 	expireAt int64 // expiration timestamp in nanoseconds (0 = no expiration)
-	valid    int32 // atomic flag: 0=empty, 1=valid, 2=deleted
+	valid    int32 // atomic flag: 0=empty, 1=valid, 2=deleted, 3=pending
 }
 
 // wtinyLFUCache implements W-TinyLFU cache with lock-free operations.
@@ -47,6 +47,7 @@ const (
 	entryEmpty   = 0
 	entryValid   = 1
 	entryDeleted = 2
+	entryPending = 3 // Entry being written/updated
 )
 
 // NewCache creates a new W-TinyLFU cache with lock-free operations.
@@ -90,6 +91,10 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 	// Calculate expiration time if TTL is set
 	var expireAt int64
 	if c.ttlNanos > 0 {
+		if c.timeProvider == nil {
+			// Fallback to default if somehow nil
+			c.timeProvider = &systemTimeProvider{}
+		}
 		expireAt = c.timeProvider.Now() + c.ttlNanos
 	}
 
@@ -98,19 +103,31 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 
 	for i := uint32(0); i <= c.tableMask; i++ {
 		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
+
+		// Safety check: ensure entries slice is not nil and idx is in bounds
+		if c.entries == nil || idx >= uint64(len(c.entries)) {
+			return false
+		}
+
 		entry := &c.entries[idx]
 
 		// Load current state atomically
 		state := atomic.LoadInt32(&entry.valid)
 
 		if state == entryEmpty || state == entryDeleted {
-			// Try to claim this slot
-			if atomic.CompareAndSwapInt32(&entry.valid, state, entryValid) {
-				// Successfully claimed - populate entry
+			// Try to claim this slot with entryPending first to prevent races
+			if atomic.CompareAndSwapInt32(&entry.valid, state, entryPending) {
+				// Successfully claimed - populate entry atomically
+				// These writes are safe because we own the slot (valid = entryPending)
+				// and no other goroutine will read it until we set valid = entryValid
 				entry.keyHash = keyHash
 				entry.key = key
-				entry.value = value
+				entry.value.Store(value)
 				atomic.StoreInt64(&entry.expireAt, expireAt)
+
+				// Mark entry as valid - this acts as a memory barrier
+				// ensuring all previous writes are visible
+				atomic.StoreInt32(&entry.valid, entryValid)
 
 				if state == entryEmpty {
 					atomic.AddInt64(&c.size, 1)
@@ -130,15 +147,24 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		// Check if this is an update to existing key
 		// We need to be careful about race conditions here
 		if state == entryValid && entry.keyHash == keyHash {
-			// Double-check the state is still valid before comparing key
-			// Add nil check to prevent panic
-			if atomic.LoadInt32(&entry.valid) == entryValid && entry.key != "" && entry.key == key {
-				// Update value - this is safe since we verified the entry is valid
-				entry.value = value
-				atomic.StoreInt64(&entry.expireAt, expireAt)
-				atomic.AddInt64(&c.sets, 1)
-				return true
+			// Try to acquire the entry for update by marking it as pending
+			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
+				// Check if this is really the same key (now safe to read)
+				if entry.key == key {
+					// Update value atomically
+					entry.value.Store(value)
+					atomic.StoreInt64(&entry.expireAt, expireAt)
+
+					// Release the entry back to valid state
+					atomic.StoreInt32(&entry.valid, entryValid)
+					atomic.AddInt64(&c.sets, 1)
+					return true
+				}
+				// Wrong key, release and continue searching
+				atomic.StoreInt32(&entry.valid, entryValid)
 			}
+			// CAS failed or wrong key, continue
+			continue
 		}
 	}
 
@@ -169,9 +195,19 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 			break
 		}
 
+		// Skip entries being written/updated
+		if state == entryPending {
+			continue
+		}
+
 		if state == entryValid && entry.keyHash == keyHash {
-			// Double-check the state and compare key safely
-			if atomic.LoadInt32(&entry.valid) == entryValid && entry.key != "" && entry.key == key {
+			// Read key atomically by checking state before and after
+			// This ensures we don't read partially written data
+			if atomic.LoadInt32(&entry.valid) != entryValid {
+				continue
+			}
+
+			if entry.key == key {
 				// Check if entry has expired
 				if c.ttlNanos > 0 {
 					expireAt := atomic.LoadInt64(&entry.expireAt)
@@ -184,9 +220,17 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 					}
 				}
 
+				// Read value atomically
+				value := entry.value.Load()
+
+				// Double-check state hasn't changed during read
+				if atomic.LoadInt32(&entry.valid) != entryValid {
+					continue
+				}
+
 				// Found key and not expired - return value
 				atomic.AddInt64(&c.hits, 1)
-				return entry.value, true
+				return value, true
 			}
 		}
 	}
@@ -210,13 +254,23 @@ func (c *wtinyLFUCache) Delete(key string) bool {
 			return false // Key not found
 		}
 
+		// Skip entries being written/updated
+		if state == entryPending {
+			continue
+		}
+
 		if state == entryValid && entry.keyHash == keyHash {
-			// Double-check and compare key safely
-			if atomic.LoadInt32(&entry.valid) == entryValid && entry.key != "" && entry.key == key {
+			// Check state is still valid
+			if atomic.LoadInt32(&entry.valid) != entryValid {
+				continue
+			}
+
+			if entry.key == key {
 				// Mark as deleted atomically
 				if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
 					entry.key = ""
-					entry.value = nil
+					// Note: we don't clear value as atomic.Value can't store nil
+					// and it will be overwritten when entry is reused
 					atomic.AddInt64(&c.size, -1)
 					atomic.AddInt64(&c.deletes, 1)
 					return true
@@ -243,9 +297,18 @@ func (c *wtinyLFUCache) Has(key string) bool {
 			return false
 		}
 
+		// Skip entries being written/updated
+		if state == entryPending {
+			continue
+		}
+
 		if state == entryValid && entry.keyHash == keyHash {
-			// Double-check and compare key safely
-			if atomic.LoadInt32(&entry.valid) == entryValid && entry.key != "" && entry.key == key {
+			// Check state is still valid
+			if atomic.LoadInt32(&entry.valid) != entryValid {
+				continue
+			}
+
+			if entry.key == key {
 				return true
 			}
 		}
@@ -270,7 +333,7 @@ func (c *wtinyLFUCache) Clear() {
 	for i := range c.entries {
 		atomic.StoreInt32(&c.entries[i].valid, entryEmpty)
 		c.entries[i].key = ""
-		c.entries[i].value = nil
+		// Note: we don't clear value as atomic.Value can't store nil
 		c.entries[i].keyHash = 0
 	}
 
@@ -341,7 +404,7 @@ func (c *wtinyLFUCache) evictOne() {
 	if victim != nil {
 		if atomic.CompareAndSwapInt32(&victim.valid, entryValid, entryDeleted) {
 			victim.key = ""
-			victim.value = nil
+			// Note: we don't clear value as atomic.Value can't store nil
 			atomic.AddInt64(&c.size, -1)
 			atomic.AddInt64(&c.evictions, 1)
 			return
@@ -356,7 +419,7 @@ func (c *wtinyLFUCache) evictOne() {
 		if state == entryValid {
 			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
 				entry.key = ""
-				entry.value = nil
+				// Note: we don't clear value as atomic.Value can't store nil
 				atomic.AddInt64(&c.size, -1)
 				atomic.AddInt64(&c.evictions, 1)
 				return

@@ -36,8 +36,12 @@ type GenericCache[K comparable, V any] struct {
 //
 // Returns a new GenericCache instance.
 func NewGenericCache[K comparable, V any](cfg Config) *GenericCache[K, V] {
+	innerCache := NewCache(cfg)
+	if innerCache == nil {
+		panic("NewCache returned nil")
+	}
 	return &GenericCache[K, V]{
-		inner: NewCache(cfg),
+		inner: innerCache,
 	}
 }
 

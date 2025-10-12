@@ -25,10 +25,10 @@ const (
 	largeKeySpace  = 10_000
 
 	// Workload ratios (read percentage)
-	writeHeavy = 0.1  // 10% reads, 90% writes
-	balanced   = 0.5  // 50% reads, 50% writes
-	readHeavy  = 0.9  // 90% reads, 10% writes
-	readOnly   = 1.0  // 100% reads
+	writeHeavy = 0.1 // 10% reads, 90% writes
+	balanced   = 0.5 // 50% reads, 50% writes
+	readHeavy  = 0.9 // 90% reads, 10% writes
+	readOnly   = 1.0 // 100% reads
 )
 
 // =============================================================================
@@ -256,7 +256,7 @@ func runMixedWorkload(b *testing.B, c CacheInterface, keySpace int, readRatio fl
 			i := 0
 			for pb.Next() {
 				key := zipf.NextString()
-				
+
 				// Determine if this is a read or write
 				if rand.Float64() < readRatio {
 					c.Get(key)
@@ -270,7 +270,7 @@ func runMixedWorkload(b *testing.B, c CacheInterface, keySpace int, readRatio fl
 		zipf := NewZipfGenerator(1.0, 1.0, uint64(keySpace-1))
 		for i := 0; i < b.N; i++ {
 			key := zipf.NextString()
-			
+
 			if rand.Float64() < readRatio {
 				c.Get(key)
 			} else {
@@ -302,7 +302,7 @@ func BenchmarkRistretto_Set_SingleThread(b *testing.B) {
 
 func benchmarkSet(b *testing.B, c CacheInterface, keySpace int, parallel bool) {
 	defer c.Close()
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
@@ -347,10 +347,10 @@ func BenchmarkRistretto_Get_SingleThread(b *testing.B) {
 
 func benchmarkGet(b *testing.B, c CacheInterface, keySpace int, parallel bool) {
 	defer c.Close()
-	
+
 	// Warmup
 	warmupCache(c, keySpace)
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
@@ -574,7 +574,7 @@ func TestHitRatio(t *testing.T) {
 
 func testHitRatio(t *testing.T, c CacheInterface, keySpace int) {
 	zipf := NewZipfGenerator(1.0, 1.0, uint64(keySpace-1))
-	
+
 	// Warmup phase
 	for i := 0; i < keySpace; i++ {
 		key := zipf.NextString()
@@ -596,6 +596,6 @@ func testHitRatio(t *testing.T, c CacheInterface, keySpace int) {
 	}
 
 	hitRatio := float64(hits) / float64(requests) * 100
-	t.Logf("%s Hit Ratio: %.2f%% (hits: %d, misses: %d)", 
+	t.Logf("%s Hit Ratio: %.2f%% (hits: %d, misses: %d)",
 		c.Name(), hitRatio, hits, misses)
 }

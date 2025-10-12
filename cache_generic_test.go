@@ -7,6 +7,7 @@
 package balios
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -231,6 +232,40 @@ func TestGenericCache_Eviction(t *testing.T) {
 	}
 	if stats.Evictions == 0 {
 		t.Error("Expected at least one eviction")
+	}
+}
+
+func TestGenericCache_Close(t *testing.T) {
+	cache := NewGenericCache[string, int](Config{MaxSize: 100})
+
+	// Populate cache
+	for i := 0; i < 10; i++ {
+		cache.Set("key-"+strconv.Itoa(i), i)
+	}
+
+	stats := cache.Stats()
+	if stats.Size != 10 {
+		t.Errorf("Expected 10 items, got %d", stats.Size)
+	}
+
+	// Close the cache
+	err := cache.Close()
+	if err != nil {
+		t.Errorf("Close returned error: %v", err)
+	}
+
+	// Verify cache is empty after Close
+	stats = cache.Stats()
+	if stats.Size != 0 {
+		t.Errorf("Expected Size=0 after Close, got %d", stats.Size)
+	}
+
+	// Verify cache can still be used after Close (graceful degradation)
+	cache.Set("new-key", 999)
+
+	value, found := cache.Get("new-key")
+	if !found || value != 999 {
+		t.Error("Expected cache to work after Close (graceful degradation)")
 	}
 }
 

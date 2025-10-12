@@ -250,6 +250,46 @@ func TestCache_Eviction(t *testing.T) {
 	}
 }
 
+func TestCache_Close(t *testing.T) {
+	cache := NewCache(Config{MaxSize: 100})
+
+	// Populate cache
+	for i := 0; i < 10; i++ {
+		cache.Set("key"+strconv.Itoa(i), i)
+	}
+
+	if cache.Len() != 10 {
+		t.Errorf("Expected 10 items, got %d", cache.Len())
+	}
+
+	// Close the cache
+	err := cache.Close()
+	if err != nil {
+		t.Errorf("Close returned error: %v", err)
+	}
+
+	// Verify cache is empty after Close
+	if cache.Len() != 0 {
+		t.Errorf("Expected empty cache after Close, got %d items", cache.Len())
+	}
+
+	stats := cache.Stats()
+	if stats.Size != 0 {
+		t.Errorf("Expected Size=0 after Close, got %d", stats.Size)
+	}
+
+	// Verify cache can still be used after Close (graceful degradation)
+	success := cache.Set("new-key", "new-value")
+	if !success {
+		t.Error("Expected Set to succeed after Close")
+	}
+
+	value, found := cache.Get("new-key")
+	if !found || value != "new-value" {
+		t.Error("Expected cache to work after Close (graceful degradation)")
+	}
+}
+
 // Single-threaded benchmarks to measure raw performance
 func BenchmarkCache_Set_SingleThread(b *testing.B) {
 	cache := NewCache(Config{MaxSize: 10000})

@@ -23,10 +23,11 @@ type entry struct {
 // Uses simple atomic operations on fixed arrays for maximum performance.
 type wtinyLFUCache struct {
 	// Configuration (immutable after creation)
-	maxSize      int32
-	tableMask    uint32
-	ttlNanos     int64        // TTL in nanoseconds (0 = no expiration)
-	timeProvider TimeProvider // Provides current time
+	maxSize          int32
+	tableMask        uint32
+	ttlNanos         int64            // TTL in nanoseconds (0 = no expiration)
+	timeProvider     TimeProvider     // Provides current time
+	metricsCollector MetricsCollector // Collects operation metrics (nil-safe)
 
 	// Fixed-size array of entries for lock-free access
 	entries []entry
@@ -62,6 +63,9 @@ func NewCache(config Config) Cache {
 	if config.TimeProvider == nil {
 		config.TimeProvider = &systemTimeProvider{}
 	}
+	if config.MetricsCollector == nil {
+		config.MetricsCollector = NoOpMetricsCollector{}
+	}
 
 	// Hash table size: power of 2, at least 2x maxSize for good load factor
 	tableSize := nextPowerOf2(config.MaxSize * 2)
@@ -70,12 +74,13 @@ func NewCache(config Config) Cache {
 	}
 
 	cache := &wtinyLFUCache{
-		maxSize:      int32(config.MaxSize), // #nosec G115 - MaxSize is validated and bounded
-		tableMask:    uint32(tableSize - 1), // #nosec G115 - tableSize is power of 2, safe conversion
-		ttlNanos:     int64(config.TTL),
-		timeProvider: config.TimeProvider,
-		entries:      make([]entry, tableSize),
-		sketch:       newFrequencySketch(config.MaxSize),
+		maxSize:          int32(config.MaxSize), // #nosec G115 - MaxSize is validated and bounded
+		tableMask:        uint32(tableSize - 1), // #nosec G115 - tableSize is power of 2, safe conversion
+		ttlNanos:         int64(config.TTL),
+		timeProvider:     config.TimeProvider,
+		metricsCollector: config.MetricsCollector,
+		entries:          make([]entry, tableSize),
+		sketch:           newFrequencySketch(config.MaxSize),
 	}
 
 	return cache
@@ -83,6 +88,12 @@ func NewCache(config Config) Cache {
 
 // Set stores a key-value pair using lock-free operations.
 func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
+	// Record start time for metrics
+	var startTime int64
+	if c.metricsCollector != nil {
+		startTime = c.timeProvider.Now()
+	}
+
 	keyHash := stringHash(key)
 
 	// Update frequency sketch (lock-free)
@@ -134,6 +145,12 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 				}
 				atomic.AddInt64(&c.sets, 1)
 
+				// Record metrics for successful Set
+				if c.metricsCollector != nil {
+					latency := c.timeProvider.Now() - startTime
+					c.metricsCollector.RecordSet(latency)
+				}
+
 				// Check if eviction needed
 				if atomic.LoadInt64(&c.size) > int64(c.maxSize) {
 					c.evictOne()
@@ -158,6 +175,12 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 					// Release the entry back to valid state
 					atomic.StoreInt32(&entry.valid, entryValid)
 					atomic.AddInt64(&c.sets, 1)
+
+					// Record metrics for successful Set (update)
+					if c.metricsCollector != nil {
+						latency := c.timeProvider.Now() - startTime
+						c.metricsCollector.RecordSet(latency)
+					}
 					return true
 				}
 				// Wrong key, release and continue searching
@@ -175,6 +198,12 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 
 // Get retrieves a value using lock-free operations.
 func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
+	// Record start time for metrics (if collector is not nil, this is fast)
+	var startTime int64
+	if c.metricsCollector != nil {
+		startTime = c.timeProvider.Now()
+	}
+
 	keyHash := stringHash(key)
 
 	// Update frequency sketch (lock-free)
@@ -216,6 +245,12 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 						// We don't wait for the CAS to succeed, just try once
 						atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted)
 						atomic.AddInt64(&c.misses, 1)
+
+						// Record miss metrics
+						if c.metricsCollector != nil {
+							latency := c.timeProvider.Now() - startTime
+							c.metricsCollector.RecordGet(latency, false)
+						}
 						return nil, false
 					}
 				}
@@ -230,17 +265,35 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 
 				// Found key and not expired - return value
 				atomic.AddInt64(&c.hits, 1)
+
+				// Record hit metrics
+				if c.metricsCollector != nil {
+					latency := c.timeProvider.Now() - startTime
+					c.metricsCollector.RecordGet(latency, true)
+				}
 				return value, true
 			}
 		}
 	}
 
 	atomic.AddInt64(&c.misses, 1)
+
+	// Record miss metrics
+	if c.metricsCollector != nil {
+		latency := c.timeProvider.Now() - startTime
+		c.metricsCollector.RecordGet(latency, false)
+	}
 	return nil, false
 }
 
 // Delete removes a key using lock-free operations.
 func (c *wtinyLFUCache) Delete(key string) bool {
+	// Record start time for metrics
+	var startTime int64
+	if c.metricsCollector != nil {
+		startTime = c.timeProvider.Now()
+	}
+
 	keyHash := stringHash(key)
 	startIdx := keyHash & uint64(c.tableMask)
 
@@ -273,6 +326,12 @@ func (c *wtinyLFUCache) Delete(key string) bool {
 					// and it will be overwritten when entry is reused
 					atomic.AddInt64(&c.size, -1)
 					atomic.AddInt64(&c.deletes, 1)
+
+					// Record metrics for successful Delete
+					if c.metricsCollector != nil {
+						latency := c.timeProvider.Now() - startTime
+						c.metricsCollector.RecordDelete(latency)
+					}
 					return true
 				}
 			}
@@ -407,6 +466,11 @@ func (c *wtinyLFUCache) evictOne() {
 			// Note: we don't clear value as atomic.Value can't store nil
 			atomic.AddInt64(&c.size, -1)
 			atomic.AddInt64(&c.evictions, 1)
+
+			// Record eviction metrics
+			if c.metricsCollector != nil {
+				c.metricsCollector.RecordEviction()
+			}
 			return
 		}
 	}

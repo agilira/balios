@@ -42,6 +42,11 @@ type Config struct {
 	// If nil, a default implementation is used. Default: system time.
 	TimeProvider TimeProvider
 
+	// MetricsCollector is used for collecting operation metrics (latencies, hit/miss rates).
+	// If nil, NoOpMetricsCollector is used (zero overhead). Default: NoOpMetricsCollector.
+	// Use this to integrate with Prometheus, DataDog, StatsD, or other monitoring systems.
+	MetricsCollector MetricsCollector
+
 	// OnEvict is called when an entry is evicted from the cache.
 	// This callback must be fast and non-blocking.
 	OnEvict func(key string, value interface{})
@@ -80,17 +85,22 @@ func (c *Config) Validate() error {
 		c.TimeProvider = &systemTimeProvider{}
 	}
 
+	if c.MetricsCollector == nil {
+		c.MetricsCollector = NoOpMetricsCollector{}
+	}
+
 	return nil
 }
 
 // DefaultConfig returns a configuration with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		MaxSize:      DefaultMaxSize,
-		WindowRatio:  DefaultWindowRatio,
-		CounterBits:  DefaultCounterBits,
-		Logger:       NoOpLogger{},
-		TimeProvider: &systemTimeProvider{},
+		MaxSize:          DefaultMaxSize,
+		WindowRatio:      DefaultWindowRatio,
+		CounterBits:      DefaultCounterBits,
+		Logger:           NoOpLogger{},
+		TimeProvider:     &systemTimeProvider{},
+		MetricsCollector: NoOpMetricsCollector{},
 	}
 }
 

@@ -118,8 +118,9 @@ func (hc *HotConfig) Start() error {
 }
 
 // Stop stops watching the configuration file.
-func (hc *HotConfig) Stop() {
-	hc.watcher.Stop()
+// Returns any error from stopping the watcher.
+func (hc *HotConfig) Stop() error {
+	return hc.watcher.Stop()
 }
 
 // GetConfig returns the current configuration (thread-safe).

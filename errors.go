@@ -27,6 +27,7 @@ const (
 	ErrCodeLoaderFailed    errors.ErrorCode = "BALIOS_LOADER_FAILED"
 	ErrCodeLoaderTimeout   errors.ErrorCode = "BALIOS_LOADER_TIMEOUT"
 	ErrCodeLoaderCancelled errors.ErrorCode = "BALIOS_LOADER_CANCELLED"
+	ErrCodeInvalidLoader   errors.ErrorCode = "BALIOS_INVALID_LOADER"
 
 	// Persistence errors (4xxx)
 	ErrCodeSaveFailed    errors.ErrorCode = "BALIOS_SAVE_FAILED"
@@ -52,6 +53,7 @@ const (
 	msgLoaderFailed       = "loader function failed"
 	msgLoaderTimeout      = "loader function timed out"
 	msgLoaderCancelled    = "loader function was cancelled"
+	msgInvalidLoader      = "loader function cannot be nil"
 	msgSaveFailed         = "failed to save cache to file"
 	msgLoadFailed         = "failed to load cache from file"
 	msgCorruptedData      = "corrupted cache data"
@@ -155,6 +157,11 @@ func NewErrLoaderTimeout(key string, timeout interface{}) error {
 // NewErrLoaderCancelled creates an error when loader is cancelled
 func NewErrLoaderCancelled(key string) error {
 	return errors.NewWithField(ErrCodeLoaderCancelled, msgLoaderCancelled, "key", key)
+}
+
+// NewErrInvalidLoader creates an error when loader function is nil
+func NewErrInvalidLoader(key string) error {
+	return errors.NewWithField(ErrCodeInvalidLoader, msgInvalidLoader, "key", key)
 }
 
 // =============================================================================

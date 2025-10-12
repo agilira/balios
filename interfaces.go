@@ -6,6 +6,8 @@
 
 package balios
 
+import "context"
+
 // Cache represents a high-performance in-memory cache interface.
 // All methods must be safe for concurrent use.
 type Cache interface {
@@ -38,6 +40,17 @@ type Cache interface {
 
 	// Stats returns cache statistics.
 	Stats() CacheStats
+
+	// GetOrLoad returns the value from cache, or loads it using the provided loader.
+	// If multiple goroutines call GetOrLoad for the same missing key concurrently,
+	// only one loader will be executed (singleflight pattern).
+	// The loaded value is cached with the cache's default TTL.
+	// If the loader returns an error, the error is NOT cached.
+	GetOrLoad(key string, loader func() (interface{}, error)) (interface{}, error)
+
+	// GetOrLoadWithContext is like GetOrLoad but respects context cancellation and timeout.
+	// The context is passed to the loader function for cancellation control.
+	GetOrLoadWithContext(ctx context.Context, key string, loader func(context.Context) (interface{}, error)) (interface{}, error)
 
 	// Close gracefully shuts down the cache and releases resources.
 	Close() error
@@ -107,3 +120,51 @@ type TimeProvider interface {
 	// This method must be very fast and allocation-free.
 	Now() int64
 }
+
+// MetricsCollector defines an interface for collecting cache operation metrics.
+// Implementations can send metrics to Prometheus, DataDog, StatsD, or other monitoring systems.
+// This interface is designed for zero overhead when nil - no metrics are collected.
+//
+// Performance requirements:
+//   - All methods must be lock-free or use minimal locking
+//   - All methods must be allocation-free
+//   - All methods must complete in < 100ns for production use
+//
+// Thread-safety:
+//   - All methods must be safe for concurrent use
+//   - Multiple goroutines will call these methods simultaneously
+type MetricsCollector interface {
+	// RecordGet records a Get operation with its latency and hit/miss result.
+	// latencyNs is the duration of the Get operation in nanoseconds.
+	// hit indicates whether the key was found (true) or not (false).
+	RecordGet(latencyNs int64, hit bool)
+
+	// RecordSet records a Set operation with its latency.
+	// latencyNs is the duration of the Set operation in nanoseconds.
+	RecordSet(latencyNs int64)
+
+	// RecordDelete records a Delete operation with its latency.
+	// latencyNs is the duration of the Delete operation in nanoseconds.
+	RecordDelete(latencyNs int64)
+
+	// RecordEviction records a cache eviction event.
+	// Called when an entry is evicted due to cache being full.
+	RecordEviction()
+}
+
+// NoOpMetricsCollector is a metrics collector that does nothing.
+// Used as default to avoid nil checks and ensure zero overhead.
+// All methods are inlined by the compiler for maximum performance.
+type NoOpMetricsCollector struct{}
+
+// RecordGet does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordGet(latencyNs int64, hit bool) {}
+
+// RecordSet does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordSet(latencyNs int64) {}
+
+// RecordDelete does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordDelete(latencyNs int64) {}
+
+// RecordEviction does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordEviction() {}

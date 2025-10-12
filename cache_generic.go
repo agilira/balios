@@ -159,6 +159,7 @@ func (c *GenericCache[K, V]) Stats() CacheStats {
 
 // Close cleans up cache resources and stops background goroutines.
 // After calling Close, the cache should not be used.
-func (c *GenericCache[K, V]) Close() {
-	c.inner.Close()
+// Returns any error from closing the underlying cache.
+func (c *GenericCache[K, V]) Close() error {
+	return c.inner.Close()
 }

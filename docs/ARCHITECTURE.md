@@ -110,7 +110,7 @@ type TimeProvider interface {
 }
 ```
 
-**Default Implementation:**
+**Default Implementation:** [go-timecache](https://github.com/agilira/go-timecache)
 - Uses `go-timecache.CachedTimeNano()` (121x faster than `time.Now()`)
 - Updates every 1ms with dedicated goroutine
 - Shared across all caches
@@ -272,11 +272,6 @@ const (
 - **Cons**: Complex, uses locks
 - **Balios advantage**: Lock-free, simpler implementation
 
-### Ristretto (Ristretto v2)
-- **Pros**: High throughput
-- **Cons**: Lower hit ratio (62.77% vs Balios 79.27%)
-- **Balios advantage**: Better hit ratio with competitive performance
-
 ## Implementation Notes
 
 ### Atomic Operations
@@ -305,19 +300,16 @@ gosec ./...
 
 ## Future Enhancements
 
-Planned features (see Development Status in main README):
-
-1. **Advanced Stats**: p50, p95, p99 latency percentiles
-2. **Async Refresh**: Stale-while-revalidate pattern
-3. **Persistence**: Save/load cache from disk
-4. **Prometheus Metrics**: Integration with monitoring
-5. **Distributed Cache**: Coordination across instances
+1. **Async Refresh**: Stale-while-revalidate pattern
+2. **Persistence**: Save/load cache from disk
+3. **Prometheus Metrics**: Integration with monitoring
+4. **Distributed Cache**: Coordination across instances
 
 ## References
 
-- W-TinyLFU Paper: "TinyLFU: A Highly Efficient Cache Admission Policy" (2017)
-- Count-Min Sketch: "An improved data stream summary: the count-min sketch" (2004)
-- Frequency Sketch Implementation: Based on Caffeine (Java) and Otter (Go)
+- **W-TinyLFU Paper**: ["TinyLFU: A Highly Efficient Cache Admission Policy"](https://arxiv.org/abs/1512.00727) by Gil Einziger, Roy Friedman, Ben Manes (2017)
+- **Count-Min Sketch**: ["An improved data stream summary: the count-min sketch and its applications"](https://doi.org/10.1016/j.jalgor.2003.12.001) by Graham Cormode, S. Muthukrishnan (2005)
+- **Frequency Sketch Implementation**: Based on [Caffeine](https://github.com/ben-manes/caffeine) (Java) and [Otter](https://github.com/maypok86/otter) (Go)
 
 ---
 

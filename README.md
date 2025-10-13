@@ -1,7 +1,14 @@
 # Balios: High-performance in-memory cache library for Go
 ### an AGILira fragment
 
-Balios is an in-memory cache implementation based on the W-TinyLFU (Window Tiny Least Frequently Used) algorithm, designed for high throughput and optimal hit ratios with advanced security and observability.
+Balios is a high-performance in-memory cache for Go based on W-TinyLFU, designed for maximum throughput, optimal hit ratio, advanced security & observability.
+
+[![CI/CD Pipeline](https://github.com/agilira/balios/actions/workflows/ci.yml/badge.svg)](https://github.com/agilira/balios/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/agilira/balios/actions/workflows/codeql.yml/badge.svg)](https://github.com/agilira/balios/actions/workflows/codeql.yml)
+[![Security](https://img.shields.io/badge/security-gosec-brightgreen.svg)](https://github.com/agilira/balios/actions/workflows/ci.yml)
+[![Test Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)](https://github.com/agilira/balios)
+
+**[Installation](#installation) • [Quick Start](#quick-start) • [Performance](#performance) • [Philosophy](#the-philosophy-behind-balios) • [Documentation](#documentation)**
 
 ## Features
 
@@ -14,7 +21,11 @@ Balios is an in-memory cache implementation based on the W-TinyLFU (Window Tiny 
 - **Hot Reload**: Dynamic configuration updates via [Argus](https://github.com/agilira/argus)
 - **Structured Errors**: Rich error context with [go-errors](https://github.com/agilira/go-errors) - see [examples/errors/](examples/errors/)
 - **Observability**: OpenTelemetry integration for metrics (p50/p95/p99 latencies, hit ratio) & logger interface. Zero overhead when disabled (compiler eliminates no-op implementations) - see [examples/otel-prometheus/](examples/otel-prometheus/)
-- **Secure by Design**: [Red-team tested](balios_security_test.go) and [fuzz tested](balios_fuzz_test.go)
+- **Secure by Design**: [Red-team tested](balios_security_test.go), [fuzz tested](balios_fuzz_test.go), and fully documented in [SECURITY_REPORT.md](SECURITY_REPORT.md)
+
+## Compatibility and Support
+
+Balios is designed for Go 1.24+ environments and follows Long-Term Support guidelines to ensure consistent performance across production deployments.
 
 ## Performance
 
@@ -55,7 +66,8 @@ Balios is an in-memory cache implementation based on the W-TinyLFU (Window Tiny 
 
 **Test Environment:** AMD Ryzen 5 7520U Go 1.25+
 
-See [benchmarks/](benchmarks/) for comprehensive results and [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed analysis.
+Run the benchmarks on your hardware [benchmarks/](benchmarks/) to evaluate performance on your specific workload and configuration. 
+See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed analysis and methodology.
 
 ## Installation
 
@@ -157,6 +169,7 @@ When Patroclus fell, it was Xanthos who spoke—granted voice by Hera herself—
 - [GetOrLoad API](docs/GETORLOAD.md) - Cache stampede prevention, singleflight pattern, best practices
 - [Metrics & Observability](docs/METRICS.md) - OpenTelemetry integration, Prometheus queries, monitoring best practices
 - [Error Handling](docs/ERRORS.md) - Structured error codes and contexts
+- [Security Report](SECURITY_REPORT.md) - Transparent security analysis, race detector findings, and production safety guarantees
 - [Examples](examples/) - Comprehensive usage examples
 - [Benchmarks](benchmarks/) - Performance comparison with popular libraries
 - [otel/README.md](otel/README.md) and [examples/otel-prometheus/](examples/otel-prometheus/) for complete setup with Grafana dashboard.

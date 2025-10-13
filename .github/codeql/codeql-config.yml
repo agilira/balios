@@ -1,0 +1,58 @@
+# CodeQL Configuration for Balios Cache Framework
+# Focuses on concurrency safety, memory safety, and data race vulnerabilities
+
+name: balios-cache-security
+
+# Enable default queries plus additional security analysis
+disable-default-queries: false
+
+# Include additional security queries relevant to cache frameworks
+queries:
+  - uses: security-and-quality
+  - uses: security-experimental
+  
+# Define custom paths for analysis
+paths:
+  - "**/*.go"
+
+# Ignore test files and dependencies (focus on production code)
+paths-ignore:
+  - "**/*_test.go"
+  - "**/testdata/**"
+  - "**/vendor/**"
+  - "**/examples/**"
+  - "**/benchmarks/**"
+
+# Packs for enhanced cache security analysis
+packs:
+  - "codeql/go-queries"
+  - "codeql/go-queries:AlertSuppression.ql"
+  - "codeql/go-queries:Security"
+
+# Query filters for cache frameworks
+query-filters:
+  - include:
+      id: go/uncontrolled-allocation-size
+      # Critical for cache memory management
+  - include:
+      id: go/incorrect-integer-conversion
+      # Important for cache size calculations
+  - include:
+      id: go/index-out-of-bounds
+      # Critical for array/slice access in cache operations
+  - exclude:
+      id: go/unused-variable
+      # Cache structs may have fields for future compatibility
+      
+# Custom extraction configuration for Go cache analysis
+extractor-config:
+  go:
+    # Enable deep analysis for concurrency and memory operations
+    index:
+      filters:
+        - include: "**/*.go"
+        - exclude: "*_test.go"
+    build_command: "go build ./..."
+    
+# Performance tuning for cache framework analysis
+compilation-cache: true

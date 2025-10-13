@@ -98,18 +98,6 @@ All benchmarks use **Zipf distribution** (α=1.0) to simulate realistic access p
 - Power law distribution mimics real-world caching scenarios
 - Standard benchmark approach used by Caffeine, Otter, etc.
 
-## Performance Targets
-
-### Balios Goals vs Competitors
-
-| Metric | Otter | Ristretto | Balios Target |
-|--------|-------|-----------|---------------|
-| Throughput | ~100M ops/s | ~80M ops/s | **>100M ops/s** |
-| Latency (p99) | <100ns | <150ns | **<100ns** |
-| Memory/entry | ~24 bytes | ~32 bytes | **<24 bytes** |
-| Hit Ratio | ~48% | ~46% | **>48%** |
-| Allocations | 0-1/op | 1-2/op | **0/op** |
-
 ## Analysis Tips
 
 ### Compare Throughput

@@ -43,12 +43,13 @@ function Invoke-Help {
     Write-ColorOutput "  staticcheck   Run staticcheck" $Green
     Write-ColorOutput "  errcheck      Run errcheck" $Green
     Write-ColorOutput "  gosec         Run gosec security scanner" $Green
+    Write-ColorOutput "  govulncheck   Run govulncheck vulnerability scanner" $Green
     Write-ColorOutput "  lint          Run all linters" $Green
-    Write-ColorOutput "  security      Run security checks" $Green
+    Write-ColorOutput "  security      Run security checks (gosec + govulncheck)" $Green
     Write-ColorOutput "  check         Run all checks (format, vet, lint, security, test)" $Green
     Write-ColorOutput "  check-race    Run all checks including race detector" $Green
     Write-ColorOutput "  tools         Install development tools" $Green
-    Write-ColorOutput "  deps          Download and verify dependencies" $Green
+    Write-ColorOutput "  deps          Download, verify and tidy dependencies" $Green
     Write-ColorOutput "  clean         Clean build artifacts and test cache" $Green
     Write-ColorOutput "  build         Build the binary" $Green
     Write-ColorOutput "  install       Install the binary to GOPATH/bin" $Green
@@ -126,6 +127,16 @@ function Invoke-GoSec {
     }
 }
 
+function Invoke-GoVulnCheck {
+    Write-ColorOutput "Running govulncheck vulnerability scanner..." $Yellow
+    if (-not (Test-ToolExists "govulncheck")) {
+        Write-ColorOutput "govulncheck not found. Run '.\Makefile.ps1 tools' to install." $Red
+        exit 1
+    }
+    & "$ToolsDir\govulncheck.exe" "./..."
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
 function Invoke-Lint {
     Invoke-StaticCheck
     Invoke-ErrCheck
@@ -134,6 +145,7 @@ function Invoke-Lint {
 
 function Invoke-Security {
     Invoke-GoSec
+    Invoke-GoVulnCheck
     Write-ColorOutput "Security checks completed." $Green
 }
 
@@ -166,6 +178,9 @@ function Invoke-Tools {
     go install github.com/securego/gosec/v2/cmd/gosec@latest
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
+    go install golang.org/x/vuln/cmd/govulncheck@latest
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    
     Write-ColorOutput "Tools installed successfully!" $Green
 }
 
@@ -174,11 +189,15 @@ function Invoke-Deps {
     go mod download
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
+    Write-ColorOutput "Verifying dependencies..." $Yellow
     go mod verify
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
+    Write-ColorOutput "Tidying dependencies..." $Yellow
     go mod tidy
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    
+    Write-ColorOutput "Dependencies verified and tidied!" $Green
 }
 
 function Invoke-Clean {
@@ -294,18 +313,23 @@ function Invoke-Status {
     
     $staticcheckStatus = if (Test-ToolExists "staticcheck") { "✓ installed" } else { "✗ missing" }
     $staticcheckColor = if (Test-ToolExists "staticcheck") { $Green } else { $Red }
-    Write-Host "staticcheck: " -NoNewline
+    Write-Host "staticcheck:  " -NoNewline
     Write-ColorOutput $staticcheckStatus $staticcheckColor
     
     $errcheckStatus = if (Test-ToolExists "errcheck") { "✓ installed" } else { "✗ missing" }
     $errcheckColor = if (Test-ToolExists "errcheck") { $Green } else { $Red }
-    Write-Host "errcheck:    " -NoNewline
+    Write-Host "errcheck:     " -NoNewline
     Write-ColorOutput $errcheckStatus $errcheckColor
     
     $gosecStatus = if (Test-ToolExists "gosec") { "✓ installed" } else { "✗ missing" }
     $gosecColor = if (Test-ToolExists "gosec") { $Green } else { $Red }
-    Write-Host "gosec:       " -NoNewline
+    Write-Host "gosec:        " -NoNewline
     Write-ColorOutput $gosecStatus $gosecColor
+    
+    $govulncheckStatus = if (Test-ToolExists "govulncheck") { "✓ installed" } else { "✗ missing" }
+    $govulncheckColor = if (Test-ToolExists "govulncheck") { $Green } else { $Red }
+    Write-Host "govulncheck:  " -NoNewline
+    Write-ColorOutput $govulncheckStatus $govulncheckColor
 }
 
 # Main execution
@@ -321,6 +345,7 @@ switch ($Command.ToLower()) {
     "staticcheck" { Invoke-StaticCheck }
     "errcheck" { Invoke-ErrCheck }
     "gosec" { Invoke-GoSec }
+    "govulncheck" { Invoke-GoVulnCheck }
     "lint" { Invoke-Lint }
     "security" { Invoke-Security }
     "check" { Invoke-Check }

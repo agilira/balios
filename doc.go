@@ -7,7 +7,6 @@
 //   - Performance: 108.8 ns/op Get, 131.1 ns/op Set (AMD Ryzen 5 7520U)
 //   - Concurrency: Lock-free operations using atomic primitives
 //   - Type Safety: Generic API with compile-time type checking
-//   - Reliability: 130 tests, all passing with -race detector
 //   - Observability: OpenTelemetry integration (optional separate package)
 //
 // # Features
@@ -320,7 +319,7 @@
 //   - Rule of thumb: ~2x your working set
 //
 // 2. Monitor hit ratio:
-//   - Target: >80% for most workloads
+//   - Target: >70% for most workloads
 //   - Low hit ratio indicates cache too small or poor key distribution
 //
 // 3. Use GetOrLoad for expensive operations:
@@ -372,10 +371,8 @@
 //
 // # Version
 //
-// Current version: v0.1.0 (Release Candidate)
-//
 // # Authors
 //
-// Maintained by the balios team.
+// Maintained by AGILira team.
 // Contributions welcome at https://github.com/agilira/balios
 package balios

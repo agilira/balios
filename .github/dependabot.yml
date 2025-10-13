@@ -1,0 +1,33 @@
+# AGILira Standard Dependabot Configuration
+# Copy this file to .github/dependabot.yml in your project root
+
+version: 2
+updates:
+  # Enable version updates for Go modules
+  - package-ecosystem: "gomod"
+    # Look for go.mod in the root directory
+    directory: "/"
+    # Check for updates daily
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "Europe/Rome"
+    # Group updates to reduce PR noise
+    groups:
+      agilira:
+        patterns:
+          - "github.com/agilira/*"
+      golang:
+        patterns:
+          - "golang.org/x/*"
+      testing:
+        patterns:
+          - "github.com/stretchr/testify"
+          - "github.com/go-test/*"
+    # Auto-merge minor and patch updates for trusted dependencies
+    open-pull-requests-limit: 5
+    assignees:
+      - "agilira"
+    commit-message:
+      prefix: "[chore]"
+      include: "scope"

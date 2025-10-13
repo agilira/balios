@@ -25,29 +25,53 @@ This architecture keeps the core lightweight while enabling professional monitor
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│           balios Cache (Core Module)                 │
-│                                                      │
-│  • Cache operations (Get/Set/Delete)                │
-│  • MetricsCollector interface                       │
-│  • NoOpMetricsCollector (zero overhead default)    │
-└──────────────────┬──────────────────────────────────┘
-                   │
-        ┌──────────┴──────────┬──────────────┐
-        │                     │              │
-        ▼                     ▼              ▼
-┌──────────────┐   ┌─────────────────┐   ┌───────────┐
-│     No-Op    │   │ OpenTelemetry   │   │  Custom   │
-│  (default)   │   │  (otel package) │   │  (yours)  │
-└──────────────┘   └────────┬────────┘   └─────┬─────┘
-                            │                   │
-                            ▼                   ▼
-                   ┌─────────────────┐   ┌────────────┐
-                   │  Prometheus     │   │  DataDog   │
-                   │  Jaeger         │   │  Custom    │
-                   │  Grafana        │   │  Backend   │
-                   └─────────────────┘   └────────────┘
+```mermaid
+graph TB
+    subgraph "Core Cache Module"
+        CACHE[Balios Cache<br/>Get/Set/Delete Operations]
+        IFACE[MetricsCollector Interface<br/>Thread-Safe API]
+        NOOP[NoOpMetricsCollector<br/>Zero Overhead Default<br/>Compiler Inlined]
+    end
+
+    subgraph "Implementation Layer"
+        OTEL[OpenTelemetry Collector<br/>otel package<br/>Professional Metrics]
+        CUSTOM[Custom Collector<br/>User Implementation<br/>Domain-Specific]
+    end
+
+    subgraph "Observability Backends"
+        PROM[Prometheus<br/>Metrics Storage<br/>Time-Series DB]
+        JAEGER[Jaeger<br/>Distributed Tracing<br/>Performance Analysis]
+        GRAFANA[Grafana<br/>Visualization<br/>Dashboards]
+    end
+
+    subgraph "Custom Integrations"
+        DD[DataDog<br/>APM Platform]
+        CUSTOM_BACK[Custom Backend<br/>Internal Tools<br/>Domain-Specific]
+    end
+
+    %% Connections
+    CACHE --> IFACE
+    IFACE --> NOOP
+    IFACE --> OTEL
+    IFACE --> CUSTOM
+
+    OTEL --> PROM
+    OTEL --> JAEGER
+    PROM --> GRAFANA
+
+    CUSTOM --> DD
+    CUSTOM --> CUSTOM_BACK
+
+    %% Styling with Argus color scheme
+    classDef core fill:#ecfdf5,stroke:#059669,stroke-width:2px
+    classDef implementation fill:#f0f9ff,stroke:#0369a1,stroke-width:2px
+    classDef observability fill:#fef3c7,stroke:#d97706,stroke-width:2px
+    classDef custom fill:#f3e8ff,stroke:#7c3aed,stroke-width:2px
+
+    class CACHE,IFACE,NOOP core
+    class OTEL,CUSTOM implementation
+    class PROM,JAEGER,GRAFANA observability
+    class DD,CUSTOM_BACK custom
 ```
 
 ## MetricsCollector Interface
@@ -609,11 +633,11 @@ func (c *SamplingCollector) RecordGet(latencyNs int64, hit bool) {
 
 Balios provides professional observability through:
 
-✅ **Clean Interface**: `MetricsCollector` interface in core  
-✅ **Zero Overhead Default**: NoOp implementation when not needed  
-✅ **OTEL Integration**: Separate package for enterprise monitoring  
-✅ **Extensible**: Easy to implement custom collectors  
-✅ **Production Ready**: <5% overhead with OTelMetricsCollector  
+**Clean Interface**: `MetricsCollector` interface in core  
+**Zero Overhead Default**: NoOp implementation when not needed  
+**OTEL Integration**: Separate package for enterprise monitoring  
+**Extensible**: Easy to implement custom collectors  
+**Production Ready**: <5% overhead with OTelMetricsCollector  
 
 Choose the monitoring solution that fits your needs:
 - **No monitoring**: Default NoOp (zero overhead)

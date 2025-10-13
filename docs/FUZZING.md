@@ -336,10 +336,12 @@ If fuzzing reveals a **security vulnerability**:
 
 ## References
 
+- **Balios Fuzz Tests**: [`balios_fuzz_test.go`](../balios_fuzz_test.go) - All 7 fuzz test implementations
+- **Balios Security Tests**: [`balios_security_test.go`](../balios_security_test.go) - Additional security hardening tests
 - [Go Fuzzing Documentation](https://go.dev/security/fuzz/)
 - [Fuzzing Best Practices](https://google.github.io/oss-fuzz/getting-started/best-practices/)
 - [Hash DoS Attacks](https://www.youtube.com/watch?v=R2Cq3CLI6H8)
-- [Balios Security Model](./SECURITY.md)
+- [Balios Security Policy](../SECURITY.md)
 
 ## Contributing
 

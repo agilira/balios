@@ -13,9 +13,8 @@ Balios is a production-ready cache implementation based on the **W-TinyLFU** (Wi
 **Key Metrics:**
 - **Performance:** 108.8 ns/op Get, 131.1 ns/op Set (AMD Ryzen 5 7520U)
 - **Concurrency:** Lock-free atomic operations
-- **Hit Ratio:** 40.21% (Scarab trace, 1M requests) - matches/exceeds Otter and Ristretto
+- **Hit Ratio:** 40.21% (Scarab trace, 1M requests)
 - **Memory:** ~66 bytes overhead per entry
-- **Reliability:** 130+ tests, zero race conditions
 
 ## Installation
 
@@ -326,7 +325,7 @@ if stats.HitRatio() < 70.0 {
 
 ## Error Handling
 
-Balios uses structured errors with error codes from the `go-errors` library.
+Balios uses structured errors with error codes from [go-errors](https://github.com/agilira/go-errors).
 
 ### Error Codes
 

@@ -1,0 +1,28 @@
+{
+  "severity": "medium",
+  "confidence": "medium",
+  "exclude": [
+    "G104",
+    "G306",
+    "G301"
+  ],
+  "exclude-generated": true,
+  "exclude-dirs": [
+    "vendor",
+    "testdata",
+    "examples/*/vendor"
+  ],
+  "tests": false,
+  "fmt": "json",
+  "out": "results.json",
+  "stdout-format": "template",
+  "rule": {
+    "G101": {
+      "pattern": "(?i)(passwd|pass|password|pwd|secret|token|pw|apikey|api_key|api-key)[a-z0-9]*.*=.*(secr|pass|key)",
+      "ignore_entropy": false,
+      "entropy_threshold": "80.0",
+      "per_char_threshold": "3.0",
+      "truncate": "32"
+    }
+  }
+}

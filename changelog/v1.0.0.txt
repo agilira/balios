@@ -1,0 +1,162 @@
+# Changelog - Version 1.0.0
+
+## Release Date
+2025-10-13
+
+## Overview
+Initial production release v1.0.0 of Balios High-Performance Cache Library. This release delivers a complete W-TinyLFU implementation with type-safe generics, automatic loading with cache stampede prevention, hot configuration reload, structured error handling, and professional observability. Balios achieves 2.6x-4.9x performance advantage over competitors while maintaining statistically equivalent hit ratios and zero data races under concurrent load.
+
+## #New
+- **Type-Safe Generics API**: `GenericCache[K comparable, V any]` with compile-time type safety
+  - Eliminates type assertions and runtime type errors
+  - Support for any comparable key type (string, int, custom types)
+  - Support for any value type (structs, pointers, slices, maps)
+  - Optimized for common types: string keys only +5.4ns overhead (3% cost)
+  - Zero allocations for string keys (both Set and Get)
+  - Type switch dispatching for 11 key type variants
+  - Backward compatible: legacy Cache interface still available
+
+- **Automatic Loading with Singleflight**: Cache stampede prevention with GetOrLoad API
+  - `GetOrLoad(key, loader)` for automatic cache population on miss
+  - `GetOrLoadWithContext(ctx, key, loader)` with timeout/cancellation support
+  - Generic versions: `GenericCache[K,V].GetOrLoad()` with type safety
+  - Singleflight pattern: 1000 concurrent requests → 1 loader execution
+  - Performance: Cache hit 19.7 ns/op (0 allocs), miss 124.5 ns/op (1 alloc)
+  - Overhead: Only +3.6ns vs manual Get+Set pattern
+  - Panic recovery with BALIOS_PANIC_RECOVERED error code
+  - Error propagation: Loader errors NOT cached (prevents error amplification)
+  - Race-free with atomic.Value wrappers and proper WaitGroup initialization
+
+- **Hot Configuration Reload**: Dynamic configuration updates with Argus integration
+  - Watch YAML, JSON, TOML, HCL, INI configuration files for changes
+  - Automatic reload on file modification with configurable poll interval
+  - Thread-safe configuration access with RWMutex
+  - Support for MaxSize, TTL, WindowRatio, CounterBits hot updates
+  - OnReload callback for custom handling of configuration changes
+  - Integration with [Argus](https://github.com/agilira/argus) file watcher
+
+- **Structured Error System**: Complete error handling with 28 error codes across 5 categories
+  - Configuration errors (BALIOS_INVALID_*)
+  - Operation errors (BALIOS_CACHE_FULL, BALIOS_KEY_NOT_FOUND, etc.)
+  - Loader errors (BALIOS_LOADER_FAILED, BALIOS_LOADER_TIMEOUT, etc.)
+  - Persistence errors (BALIOS_SAVE_FAILED, BALIOS_LOAD_FAILED, etc.)
+  - Internal errors (BALIOS_INTERNAL_ERROR, BALIOS_PANIC_RECOVERED)
+  - Error context with rich metadata for debugging
+  - Retry semantics (AsRetryable) for transient failures
+  - Severity levels (Critical, Warning) for error classification
+  - JSON serialization support for errors
+  - Integration with [go-errors](https://github.com/agilira/go-errors) library
+
+- **Professional Observability**: OpenTelemetry integration with zero overhead default
+  - MetricsCollector interface in core module
+  - NoOpMetricsCollector default (compiler eliminates, zero overhead)
+  - balios/otel package for OpenTelemetry integration
+  - Prometheus exporter support with pre-built Grafana dashboards
+  - Metrics: p50/p95/p99 latencies, hit ratio, evictions
+  - Logger interface for structured logging integration
+  - <5% performance overhead with OTelMetricsCollector
+
+- **Security Hardening**: Red-team tested and fuzz tested
+  - 7 comprehensive fuzz tests (FuzzStringHash, FuzzCacheSetGet, FuzzCacheConcurrentOperations, etc.)
+  - Hash collision DoS resistance testing
+  - Memory exhaustion attack protection
+  - Concurrent race condition detection
+  - Panic recovery validation
+  - Configuration injection resistance
+  - Makefile targets: `make fuzz` (30s quick), `make fuzz-extended` (5min deep)
+
+## #Updated
+- Performance optimizations with go-timecache integration (~121x faster time operations)
+- Enhanced benchmark suite with realistic workload patterns (Write-Heavy, Balanced, Read-Heavy, Read-Only)
+- Improved race detection with two-phase CAS locking pattern
+- Updated documentation with comprehensive guides
+
+## #Corrected
+- Race condition in ConcurrentSetDelete test (added 10ms stabilization delay)
+- Generic cache overhead reduced from +27ns to +5.4ns for string keys (82% reduction)
+- Entry pending state handling for data integrity under concurrent writes
+- Double-check pattern in Get() for consistency validation
+
+## #Features
+- `NewCache(config)` - Create cache with W-TinyLFU algorithm
+- `NewGenericCache[K, V](config)` - Type-safe cache with generics
+- `Set(key, value)` / `Get(key)` - Basic cache operations
+- `GetOrLoad(key, loader)` - Automatic loading with singleflight
+- `GetOrLoadWithContext(ctx, key, loader)` - Context-aware loading
+- `Delete(key)` / `Clear()` - Cache management
+- `Has(key)` / `Size()` / `Stats()` - Introspection
+- `HitRatio()` - Cache effectiveness metric (0-100%)
+- `SetMetricsCollector(collector)` - Enable observability
+- `SetLogger(logger)` - Structured logging integration
+- `HotConfig` - Dynamic configuration reload support
+
+## #Security
+- **Fuzz Testing**: 7 comprehensive fuzz tests for hash collision, memory exhaustion, race conditions
+- **Race Detection**: Zero data races validated with -race detector
+- **Panic Recovery**: Loader panics safely recovered with error propagation
+- **Gosec Validated**: 0 security issues detected
+- **Input Validation**: Configuration bounds checking and sanitization
+- **Error Boundaries**: Isolated failure handling per operation
+- **Atomic Operations**: Memory-safe concurrent access patterns
+
+## #Quality Metrics
+- **Test Coverage**: 86.1% with comprehensive edge case validation
+- **Security Scan**: gosec 0 issues detected
+- **Race Detection**: Clean race detector validation under load
+- **Benchmark Stability**: <2% variance across 10 runs
+- **Hit Ratio**: 80.20% (statistically equivalent to Otter 79.64%)
+
+## #CI/CD Pipeline
+- **Comprehensive CI**: Format check, vet, staticcheck, gosec, race detection
+- **CodeQL Analysis**: Weekly security scanning with govulncheck integration
+- **Cross-Platform Builds**: Ubuntu, Windows, macOS with Go 1.25+
+- **Code Coverage**: Codecov integration with detailed reports
+- **Dependabot**: Automated dependency updates with auto-merge workflow
+- **PR Workflow**: Optimized validation for fast feedback
+
+## #Documentation
+- **Professional README**: Performance tables, philosophy section, quick start
+- **API Reference** (docs/API.md): Complete API documentation with examples
+- **Architecture Guide** (docs/ARCHITECTURE.md): W-TinyLFU internals, memory layout
+- **Performance Analysis** (docs/PERFORMANCE.md): Comprehensive benchmarks, hit ratio analysis
+- **GetOrLoad Guide** (docs/GETORLOAD.md): Cache stampede prevention, best practices
+- **Metrics & Observability** (docs/METRICS.md): OpenTelemetry integration, Prometheus setup
+- **Error Handling** (docs/ERRORS.md): Structured error codes and contexts
+- **Fuzzing Guide** (docs/FUZZING.md): Security testing and CI/CD integration
+- **Examples**: Complete examples for getorload, errors, otel-prometheus
+
+## #Compatibility
+- **Go Version**: 1.23+ required for generics and modern standard library
+- **Platform Support**: linux/amd64, darwin/amd64, windows/amd64
+- **Dependencies**: 
+  - github.com/agilira/go-timecache v1.0.2 (time caching)
+  - github.com/agilira/go-errors v1.1.0 (structured errors)
+  - github.com/agilira/argus v1.0.2 (hot reload, optional)
+  - go.opentelemetry.io/* (observability, optional in balios/otel package)
+
+## #Observability
+- **Zero Overhead Default**: NoOpMetricsCollector inlined by compiler
+- **OpenTelemetry Support**: Professional metrics with balios/otel package
+- **Prometheus Export**: Pre-built Grafana dashboards included
+- **Metrics Collected**: Hit ratio, latencies (p50/p95/p99), evictions
+- **Logger Interface**: Structured logging integration for any logger
+- **Performance Impact**: <5% overhead with OTelMetricsCollector enabled
+
+## #Extensibility
+- **Generic Keys**: Any comparable type (string, int, structs)
+- **Generic Values**: Any type (structs, pointers, slices, maps)
+- **Custom Loaders**: User-defined loading functions with error handling
+- **Custom Metrics**: Implement MetricsCollector interface
+- **Custom Logging**: Implement Logger interface
+- **Hot Reload Callbacks**: OnReload hooks for configuration changes
+
+## #Future Roadmap (PLANNED)
+- Async refresh (stale-while-revalidate pattern)
+- Persistence (save/load from disk)
+- Distributed cache coordination
+- Write-through/write-behind patterns
+- CLI application for cache administration
+
+---
+
+Balios v1.0.0 • an AGILira fragment

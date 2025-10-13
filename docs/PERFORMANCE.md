@@ -4,9 +4,9 @@ Comprehensive performance analysis and benchmark results for Balios cache.
 
 ## Test Environment
 
-- **CPU**: AMD Ryzen 5 7520U with Radeon Graphics
+- **CPU**: AMD Ryzen 5 7520U
 - **OS**: Windows (amd64)
-- **Go Version**: 1.21+
+- **Go Version**: 1.25+
 - **Race Detector**: Enabled for all tests
 - **Date**: October 2025
 
@@ -128,17 +128,16 @@ Extended test results (1M requests, Zipf distribution):
 
 Different Zipf skew factors (s):
 
-| Workload | Balios | Otter | Ristretto | Winner |
+| Workload | Balios | Otter | Ristretto |        |
 |----------|--------|-------|-----------|--------|
 | **Highly Skewed** (s=1.5) | 89.65% | 90.73% | 89.80% | Otter (+1.2%) |
-| **Moderate** (s=1.0) | **72.12%** | 70.96% | 63.30% | **Balios** (+1.6%) |
-| **Less Skewed** (s=0.8) | **71.74%** | 71.25% | 66.42% | **Balios** (+0.7%) |
+| **Moderate** (s=1.0) | 72.12% | 70.96% | 63.30% | Balios (+1.6%) |
+| **Less Skewed** (s=0.8) | 71.74% | 71.25% | 66.42% | Balios (+0.7%) |
 | **Large KeySpace** | 75.32% | 75.68% | 55.21% | Otter (+0.5%) |
 
 **Key Findings:**
-- Balios excels in moderate-to-less skewed workloads
-- Otter slightly better on highly skewed (hot keys) workloads
-- Both outperform Ristretto by 8-17 percentage points
+- Balios and Otter have statistically equivalent hit ratios (differences <2% are noise)
+- W-TinyLFU effectiveness depends on workload skew, not implementation
 
 ## Memory Efficiency
 
@@ -228,7 +227,7 @@ Performance vs cache size:
 - Packed in uint64 (16 counters per word)
 - Lock-free atomic increments
 
-### 6. Time Provider
+### 6. Time Provider [go-timecache](https://github.com/agilira/go-timecache)
 - Cached time updates (121x faster)
 - Shared across all caches
 - Dedicated goroutine for updates
@@ -252,14 +251,14 @@ Performance vs cache size:
 
 ### Common Pitfalls
 
-❌ **Don't**: Create many small caches  
-✅ **Do**: Use one large cache with key prefixes
+**Don't**: Create many small caches  
+**Do**: Use one large cache with key prefixes
 
-❌ **Don't**: Use very small MaxSize (<100)  
-✅ **Do**: Set MaxSize to at least 1000
+**Don't**: Use very small MaxSize (<100)  
+**Do**: Set MaxSize to at least 1000
 
-❌ **Don't**: Store large values (>1MB)  
-✅ **Do**: Store references or compressed data
+**Don't**: Store large values (>1MB)  
+**Do**: Store references or compressed data
 
 ## Benchmarking Your Setup
 
@@ -281,23 +280,12 @@ go test -run TestHitRatioExtended -v
 go test -race -bench=. -benchmem
 ```
 
-## Conclusion
-
-Balios delivers:
-- ✅ **Fastest operations**: 2-3x faster than competitors
-- ✅ **Excellent hit ratio**: Equivalent to best (Otter)
-- ✅ **Zero allocations**: On hot path (Get operations)
-- ✅ **Lock-free**: Near-linear CPU scaling
-- ✅ **Production-ready**: Race detector clean, 69 tests passing
-
-**Recommendation**: Balios is the fastest Go cache with excellent hit ratio and production-grade reliability.
-
 ## References
 
-- Benchmark source: `benchmarks/benchmark_test.go`
-- Hit ratio tests: `benchmarks/hitratio_test.go`
-- Loading benchmarks: `loading_bench_test.go`
-- Architecture: `docs/ARCHITECTURE.md`
+- Benchmark source: [`benchmarks/benchmark_test.go`](../benchmarks/benchmark_test.go)
+- Hit ratio tests: [`benchmarks/hitratio_test.go`](../benchmarks/hitratio_test.go)
+- Loading benchmarks: [`loading_bench_test.go`](../loading_bench_test.go)
+- Architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ---
 

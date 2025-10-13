@@ -221,7 +221,7 @@ func FuzzCacheSetGet(f *testing.F) {
 		cache := NewCache(Config{
 			MaxSize: 100,
 		})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// PROPERTY 1: Set operation should not panic
 		var setResult bool
@@ -319,7 +319,7 @@ func FuzzCacheConcurrentOperations(f *testing.F) {
 		cache := NewCache(Config{
 			MaxSize: 100,
 		})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Normalize operation type to 0-2
 		op := int(opType) % 3
@@ -412,7 +412,7 @@ func FuzzGetOrLoad(f *testing.F) {
 		cache := NewCache(Config{
 			MaxSize: 100,
 		})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Normalize loader type to 0-3
 		lt := int(loaderType) % 4
@@ -507,7 +507,7 @@ func FuzzGetOrLoadWithContext(f *testing.F) {
 		cache := NewCache(Config{
 			MaxSize: 100,
 		})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
@@ -630,7 +630,7 @@ func FuzzCacheConfig(f *testing.F) {
 		if cache == nil {
 			t.Fatal("NewCache returned nil cache")
 		}
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// PROPERTY 2: Cache should have valid capacity (positive and bounded)
 		capacity := cache.Capacity()
@@ -704,7 +704,7 @@ func FuzzCacheMemorySafety(f *testing.F) {
 		cache := NewCache(Config{
 			MaxSize: 100,
 		})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Track memory baseline
 		runtime.GC()
@@ -789,7 +789,7 @@ func TestFuzzRegressions(t *testing.T) {
 
 	t.Run("EmptyKeyHandling", func(t *testing.T) {
 		cache := NewCache(Config{MaxSize: 100})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Empty keys should be handled gracefully
 		cache.Set("", "value")
@@ -801,7 +801,7 @@ func TestFuzzRegressions(t *testing.T) {
 
 	t.Run("NullByteInKey", func(t *testing.T) {
 		cache := NewCache(Config{MaxSize: 100})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Null bytes in keys should not cause issues
 		key := "key\x00with\x00nulls"
@@ -814,7 +814,7 @@ func TestFuzzRegressions(t *testing.T) {
 
 	t.Run("VeryLongKey", func(t *testing.T) {
 		cache := NewCache(Config{MaxSize: 100})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Very long keys should not cause crashes
 		key := strings.Repeat("A", 1000000) // 1MB key
@@ -824,7 +824,7 @@ func TestFuzzRegressions(t *testing.T) {
 
 	t.Run("ConcurrentPanickingLoaders", func(t *testing.T) {
 		cache := NewCache(Config{MaxSize: 100})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Multiple concurrent panicking loaders should not crash cache
 		var wg sync.WaitGroup
@@ -856,7 +856,7 @@ func TestFuzzRegressions(t *testing.T) {
 			WindowRatio: -0.5,
 			CounterBits: -10,
 		})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Cache should have applied defaults and be functional
 		if cache.Capacity() <= 0 {
@@ -871,7 +871,7 @@ func TestFuzzRegressions(t *testing.T) {
 
 	t.Run("ZeroTimeout", func(t *testing.T) {
 		cache := NewCache(Config{MaxSize: 100})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Zero timeout should be handled
 		ctx, cancel := context.WithTimeout(context.Background(), 0)
@@ -935,7 +935,7 @@ func TestFuzzPerformanceInvariants(t *testing.T) {
 
 	t.Run("CacheOperationPerformance", func(t *testing.T) {
 		cache := NewCache(Config{MaxSize: 10000})
-		defer cache.Close()
+		defer func() { _ = cache.Close() }()
 
 		// Warm up cache
 		for i := 0; i < 1000; i++ {

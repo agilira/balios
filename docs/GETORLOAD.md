@@ -268,7 +268,7 @@ func contextCancellation() {
         })
     
     if err != nil {
-        fmt.Printf("❌ Expected cancellation error: %v\n", err)
+        fmt.Printf("Expected cancellation error: %v\n", err)
     }
 }
 ```
@@ -413,10 +413,9 @@ type inflightCall struct {
 3. **Execute**: First goroutine runs loader, others wait
 4. **Broadcast**: `wg.Done()` wakes all waiters
 
-**Race-Free Guarantee:**
+**Race-Free:**
 - WaitGroup initialized before any goroutine can wait
 - atomic.Value with wrappers for nil-safe storage
-- All tests pass with `-race` detector
 
 ### Nil Handling
 
@@ -645,10 +644,10 @@ wg.Wait()
 ```
 ## References
 
-- Implementation: `loading.go`, `loading_generic.go`
-- Tests: `loading_test.go`, `loading_generic_test.go`
-- Benchmarks: `loading_bench_test.go`
-- Example: `examples/getorload/main.go`
+- Implementation: [`loading.go`](../loading.go), [`loading_generic.go`](../loading_generic.go)
+- Tests: [`loading_test.go`](../loading_test.go), [`loading_generic_test.go`](../loading_generic_test.go)
+- Benchmarks: [`loading_bench_test.go`](../loading_bench_test.go)
+- Example: [`examples/getorload/main.go`](../examples/getorload/main.go)
 
 ---
 

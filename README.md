@@ -1,7 +1,8 @@
-# Balios: High-performance in-memory cache library for Go
-### an AGILira fragment
+# Balios: High-performance in-memory caching library for Go
 
-Balios is a high-performance in-memory cache for Go based on W-TinyLFU, designed for maximum throughput, optimal hit ratio, advanced security & observability.
+![Balios Banner](assets/banner.png)
+
+Balios is a high-performance in-memory caching library for Go, based on W-TinyLFU, engineered for maximum throughput, optimal hit ratio, professional security & advanced observability—without sacrificing developer experience.
 
 [![CI/CD Pipeline](https://github.com/agilira/balios/actions/workflows/ci.yml/badge.svg)](https://github.com/agilira/balios/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/agilira/balios/actions/workflows/codeql.yml/badge.svg)](https://github.com/agilira/balios/actions/workflows/codeql.yml)
@@ -10,7 +11,7 @@ Balios is a high-performance in-memory cache for Go based on W-TinyLFU, designed
 [![Test Coverage](https://img.shields.io/badge/coverage-88.8%25-brightgreen)](https://github.com/agilira/balios)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11297/badge)](https://www.bestpractices.dev/projects/11297)
 
-**[Installation](#installation) • [Quick Start](#quick-start) • [Performance](#performance) • [Philosophy](#the-philosophy-behind-balios) • [Documentation](#documentation)**
+**[Features](#features) • [Quick Start](#quick-start) • [Performance](#performance) • [Observability Architecture](#observability-architecture) • [Philosophy](#the-philosophy-behind-balios) • [Documentation](#documentation)**
 
 ## Features
 
@@ -28,48 +29,6 @@ Balios is a high-performance in-memory cache for Go based on W-TinyLFU, designed
 ## Compatibility and Support
 
 Balios is designed for Go 1.24+ environments and follows Long-Term Support guidelines to ensure consistent performance across production deployments.
-
-## Performance
-
-**Single-Threaded Performance:**
-
-| Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
-| :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **131.3 ns/op** | **+0%** | **105.5 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 139.0 ns/op | +6% | 108.8 ns/op | +3% | 1/0 allocs/op |
-| Otter | 338.7 ns/op | +158% | 120.1 ns/op | +14% | 1/0 allocs/op |
-| Ristretto | 282.7 ns/op | +115% | 156.6 ns/op | +48% | 2/0 allocs/op |
-
-**Parallel Performance (8 cores):**
-
-| Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
-| :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **39.90 ns/op** | **+0%** | **30.06 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 42.21 ns/op | +6% | 32.34 ns/op | +8% | 1/0 allocs/op |
-| Otter | 230.8 ns/op | +478% | 27.62 ns/op | -8% | 1/0 allocs/op |
-| Ristretto | 114.7 ns/op | +187% | 35.42 ns/op | +18% | 1/0 allocs/op |
-
-**Mixed Workloads (Realistic Scenarios):**
-
-| Workload | Balios | Balios-Generic | Otter | Ristretto | Best |
-| :------- | -----: | -------------: | ----: | --------: | :--- |
-| Write-Heavy (10% R / 90% W) | **42.47 ns/op** | 44.86 ns/op | 211.6 ns/op | 125.4 ns/op | **Balios** |
-| Balanced (50% R / 50% W) | **41.76 ns/op** | 42.55 ns/op | 149.9 ns/op | 110.2 ns/op | **Balios** |
-| Read-Heavy (90% R / 10% W) | **46.97 ns/op** | 58.68 ns/op | 51.35 ns/op | 81.68 ns/op | **Balios** |
-| Read-Only (100% R) | 34.41 ns/op | 33.94 ns/op | **28.10 ns/op** | 33.02 ns/op | **Otter** |
-
-**Hit Ratio (100K requests, Zipf distribution):**
-
-| Cache | Hit Ratio | Notes |
-| :---- | --------: | :---- |
-| **Balios** | **80.20%** | Statistically equivalent to Otter |
-| Otter | 79.64% | -0.7% (within noise margin) |
-| Ristretto | 71.39% | -11% |
-
-**Test Environment:** AMD Ryzen 5 7520U Go 1.25+
-
-Run the benchmarks on your hardware [benchmarks/](benchmarks/) to evaluate performance on your specific workload and configuration. 
-See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed analysis and methodology.
 
 ## Installation
 
@@ -122,6 +81,48 @@ func main() {
 }
 ```
 
+## Performance
+
+**Single-Threaded Performance:**
+
+| Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
+| :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
+| **Balios** | **131.3 ns/op** | **+0%** | **105.5 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 139.0 ns/op | +6% | 108.8 ns/op | +3% | 1/0 allocs/op |
+| Otter | 338.7 ns/op | +158% | 120.1 ns/op | +14% | 1/0 allocs/op |
+| Ristretto | 282.7 ns/op | +115% | 156.6 ns/op | +48% | 2/0 allocs/op |
+
+**Parallel Performance (8 cores):**
+
+| Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
+| :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
+| **Balios** | **39.90 ns/op** | **+0%** | **30.06 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 42.21 ns/op | +6% | 32.34 ns/op | +8% | 1/0 allocs/op |
+| Otter | 230.8 ns/op | +478% | 27.62 ns/op | -8% | 1/0 allocs/op |
+| Ristretto | 114.7 ns/op | +187% | 35.42 ns/op | +18% | 1/0 allocs/op |
+
+**Mixed Workloads (Realistic Scenarios):**
+
+| Workload | Balios | Balios-Generic | Otter | Ristretto | Best |
+| :------- | -----: | -------------: | ----: | --------: | :--- |
+| Write-Heavy (10% R / 90% W) | **42.47 ns/op** | 44.86 ns/op | 211.6 ns/op | 125.4 ns/op | **Balios** |
+| Balanced (50% R / 50% W) | **41.76 ns/op** | 42.55 ns/op | 149.9 ns/op | 110.2 ns/op | **Balios** |
+| Read-Heavy (90% R / 10% W) | **46.97 ns/op** | 58.68 ns/op | 51.35 ns/op | 81.68 ns/op | **Balios** |
+| Read-Only (100% R) | 34.41 ns/op | 33.94 ns/op | **28.10 ns/op** | 33.02 ns/op | **Otter** |
+
+**Hit Ratio (100K requests, Zipf distribution):**
+
+| Cache | Hit Ratio | Notes |
+| :---- | --------: | :---- |
+| **Balios** | **80.20%** | Statistically equivalent to Otter |
+| Otter | 79.64% | -0.7% (within noise margin) |
+| Ristretto | 71.39% | -11% |
+
+**Test Environment:** AMD Ryzen 5 7520U Go 1.25+
+
+Run the benchmarks on your hardware [benchmarks/](benchmarks/) to evaluate performance on your specific workload and configuration. 
+See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed analysis and methodology.
+
 ### Automatic Loading with GetOrLoad
 
 Prevent cache stampede with singleflight pattern:
@@ -157,6 +158,92 @@ user, err := cache.GetOrLoadWithContext(ctx, "user:123",
 - Panic recovery: Returns `BALIOS_PANIC_RECOVERED` error if loader panics
 
 See [examples/getorload/](examples/getorload/) for comprehensive examples.
+
+## Observability Architecture
+
+```mermaid
+graph TB
+    subgraph "Core Cache Module"
+        CACHE[Balios Cache<br/>Get/Set/Delete Operations]
+        IFACE[MetricsCollector Interface<br/>Thread-Safe API]
+        NOOP[NoOpMetricsCollector<br/>Zero Overhead Default<br/>Compiler Inlined]
+    end
+
+    subgraph "Implementation Layer"
+        OTEL[OpenTelemetry Collector<br/>otel package<br/>Professional Metrics]
+        CUSTOM[Custom Collector<br/>User Implementation<br/>Domain-Specific]
+    end
+
+    subgraph "Observability Backends"
+        PROM[Prometheus<br/>Metrics Storage<br/>Time-Series DB]
+        JAEGER[Jaeger<br/>Distributed Tracing<br/>Performance Analysis]
+        GRAFANA[Grafana<br/>Visualization<br/>Dashboards]
+    end
+
+    subgraph "Custom Integrations"
+        DD[DataDog<br/>APM Platform]
+        CUSTOM_BACK[Custom Backend<br/>Internal Tools<br/>Domain-Specific]
+    end
+
+    %% Connections
+    CACHE --> IFACE
+    IFACE --> NOOP
+    IFACE --> OTEL
+    IFACE --> CUSTOM
+
+    OTEL --> PROM
+    OTEL --> JAEGER
+    PROM --> GRAFANA
+
+    CUSTOM --> DD
+    CUSTOM --> CUSTOM_BACK
+
+    %% Styling with Argus color scheme
+    classDef core fill:#ecfdf5,stroke:#059669,stroke-width:2px
+    classDef implementation fill:#f0f9ff,stroke:#0369a1,stroke-width:2px
+    classDef observability fill:#fef3c7,stroke:#d97706,stroke-width:2px
+    classDef custom fill:#f3e8ff,stroke:#7c3aed,stroke-width:2px
+
+    class CACHE,IFACE,NOOP core
+    class OTEL,CUSTOM implementation
+    class PROM,JAEGER,GRAFANA observability
+    class DD,CUSTOM_BACK custom
+```
+
+### Logger Interface
+
+```go
+// Logger defines a minimal logging interface with zero overhead.
+// Implementations should use structured logging and be allocation-free.
+type Logger interface {
+    // Debug logs a debug message with optional key-value pairs.
+    Debug(msg string, keyvals ...interface{})
+
+    // Info logs an info message with optional key-value pairs.
+    Info(msg string, keyvals ...interface{})
+
+    // Warn logs a warning message with optional key-value pairs.
+    Warn(msg string, keyvals ...interface{})
+
+    // Error logs an error message with optional key-value pairs.
+    Error(msg string, keyvals ...interface{})
+}
+```
+
+**Integration example:**
+```go
+import "log/slog"
+
+// Using standard library slog
+logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+cache := balios.New[string, User](balios.Config{
+    Size: 1000,
+    Logger: logger,
+})
+```
+
+see [Metrics & Observability](docs/METRICS.md) for full documentation.
 
 ## The Philosophy Behind Balios
 

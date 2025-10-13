@@ -16,4 +16,4 @@ comment:
 ignore:
   - "**/*_test.go"
   - "examples/**"
-  - "otel/**"
+  - "benchmarks/**"

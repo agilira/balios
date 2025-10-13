@@ -9,6 +9,7 @@ Balios is a high-performance in-memory cache for Go based on W-TinyLFU, designed
 [![Go Report Card](https://goreportcard.com/badge/github.com/agilira/balios)](https://goreportcard.com/report/github.com/agilira/balios)
 [![Test Coverage](https://img.shields.io/badge/coverage-88.8%25-brightgreen)](https://github.com/agilira/balios)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11297/badge)]
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/agilira/balios/badge)](https://securityscorecards.dev/viewer/?uri=github.com/agilira/balios)
 
 **[Installation](#installation) • [Quick Start](#quick-start) • [Performance](#performance) • [Philosophy](#the-philosophy-behind-balios) • [Documentation](#documentation)**
 

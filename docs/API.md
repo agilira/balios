@@ -1,10 +1,5 @@
 # Balios API Reference
-
-> **High-performance, thread-safe, in-memory cache for Go**
-
-[![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8?style=flat&logo=go)](https://go.dev/)
-[![License](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](../LICENSE.md)
-[![Version](https://img.shields.io/badge/version-v0.1.0--dev-orange.svg)](https://github.com/agilira/balios)
+### High-performance, thread-safe, in-memory cache for Go
 
 ## Overview
 

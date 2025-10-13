@@ -943,7 +943,11 @@ func TestSecurity_RaceConditionAttacks(t *testing.T) {
 				stats.Size, cache.Capacity())
 		} else {
 			t.Logf("SECURITY ACCEPTABLE: Cache size within bounds after concurrent set/delete: %d", stats.Size)
-		} // Verify cache still works
+		}
+
+		// Verify cache still works after extreme stress
+		// Give it a moment to stabilize atomic counters
+		time.Sleep(10 * time.Millisecond)
 		cache.Set("verify_key", "verify_value")
 		if val, found := cache.Get("verify_key"); !found || val != "verify_value" {
 			t.Error("SECURITY ISSUE: Cache corrupted and non-functional")

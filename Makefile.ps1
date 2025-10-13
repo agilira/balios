@@ -36,9 +36,8 @@ function Invoke-Help {
     Write-ColorOutput "  test          Run tests" $Green
     Write-ColorOutput "  race          Run tests with race detector" $Green
     Write-ColorOutput "  coverage      Run tests with coverage" $Green
-    Write-ColorOutput "  fuzz          Run fuzz tests (quick - 1 minute each)" $Green
-    Write-ColorOutput "  fuzz-extended Run fuzz tests (extended - 10 minutes each)" $Green
-    Write-ColorOutput "  fuzz-long     Run fuzz tests (continuous - 8 hours)" $Green
+    Write-ColorOutput "  fuzz          Run fuzz tests (quick - 30 sec each, ~3.5 min total)" $Green
+    Write-ColorOutput "  fuzz-extended Run fuzz tests (extended - 5 min each, ~35 min total)" $Green
     Write-ColorOutput "  fmt           Format Go code" $Green
     Write-ColorOutput "  vet           Run go vet" $Green
     Write-ColorOutput "  staticcheck   Run staticcheck" $Green
@@ -210,8 +209,8 @@ function Invoke-Bench {
 }
 
 function Invoke-Fuzz {
-    Write-ColorOutput "Running fuzz tests (quick - 1 minute each)..." $Yellow
-    Write-ColorOutput "This will run all fuzz tests with 1 minute timeout." $Blue
+    Write-ColorOutput "Running fuzz tests (quick - 30 seconds each)..." $Yellow
+    Write-ColorOutput "Quick feedback loop for development. Total time: ~3.5 minutes" $Blue
     
     $fuzzTests = @(
         "FuzzStringHash",
@@ -225,7 +224,7 @@ function Invoke-Fuzz {
     
     foreach ($test in $fuzzTests) {
         Write-ColorOutput "Running $test..." $Yellow
-        go test -fuzz=$test -fuzztime=1m
+        go test -fuzz=$test -fuzztime=30s
         if ($LASTEXITCODE -ne 0) {
             Write-ColorOutput "❌ $test failed!" $Red
             exit $LASTEXITCODE
@@ -237,9 +236,8 @@ function Invoke-Fuzz {
 }
 
 function Invoke-FuzzExtended {
-    Write-ColorOutput "Running fuzz tests (extended - 10 minutes each)..." $Yellow
-    Write-ColorOutput "This will take approximately 70 minutes total." $Blue
-    Write-ColorOutput "Recommended for CI/CD or pre-release testing." $Blue
+    Write-ColorOutput "Running fuzz tests (extended - 5 minutes each)..." $Yellow
+    Write-ColorOutput "Recommended for pre-commit or PR checks. Total time: ~35 minutes" $Blue
     
     $fuzzTests = @(
         "FuzzStringHash",
@@ -252,8 +250,8 @@ function Invoke-FuzzExtended {
     )
     
     foreach ($test in $fuzzTests) {
-        Write-ColorOutput "Running $test (10 minutes)..." $Yellow
-        go test -fuzz=$test -fuzztime=10m
+        Write-ColorOutput "Running $test (5 minutes)..." $Yellow
+        go test -fuzz=$test -fuzztime=5m
         if ($LASTEXITCODE -ne 0) {
             Write-ColorOutput "❌ $test failed!" $Red
             exit $LASTEXITCODE
@@ -262,45 +260,6 @@ function Invoke-FuzzExtended {
     }
     
     Write-ColorOutput "All extended fuzz tests completed successfully!" $Green
-}
-
-function Invoke-FuzzLong {
-    Write-ColorOutput "Running fuzz tests (continuous - 8 hours)..." $Yellow
-    Write-ColorOutput "This will run overnight or during extended CI." $Blue
-    Write-ColorOutput "⚠️  This will take approximately 8 hours!" $Yellow
-    Write-ColorOutput "Consider running this on a dedicated machine or overnight." $Blue
-    
-    # Ask for confirmation
-    $confirmation = Read-Host "Continue with 8-hour fuzz testing? (y/N)"
-    if ($confirmation -ne 'y' -and $confirmation -ne 'Y') {
-        Write-ColorOutput "Fuzz testing cancelled." $Yellow
-        return
-    }
-    
-    $fuzzTests = @(
-        "FuzzStringHash",
-        "FuzzCacheSetGet",
-        "FuzzCacheConcurrentOperations",
-        "FuzzGetOrLoad",
-        "FuzzGetOrLoadWithContext",
-        "FuzzCacheConfig",
-        "FuzzCacheMemorySafety"
-    )
-    
-    $startTime = Get-Date
-    foreach ($test in $fuzzTests) {
-        $elapsed = (Get-Date) - $startTime
-        Write-ColorOutput "Running $test (elapsed: $($elapsed.ToString('hh\:mm\:ss')))..." $Yellow
-        go test -fuzz=$test -fuzztime=8h
-        if ($LASTEXITCODE -ne 0) {
-            Write-ColorOutput "❌ $test failed!" $Red
-            exit $LASTEXITCODE
-        }
-        Write-ColorOutput "✓ $test passed" $Green
-    }
-    
-    $totalTime = (Get-Date) - $startTime
-    Write-ColorOutput "All long-running fuzz tests completed in $($totalTime.ToString('hh\:mm\:ss'))!" $Green
 }
 
 function Invoke-CI {
@@ -357,7 +316,6 @@ switch ($Command.ToLower()) {
     "coverage" { Invoke-Coverage }
     "fuzz" { Invoke-Fuzz }
     "fuzz-extended" { Invoke-FuzzExtended }
-    "fuzz-long" { Invoke-FuzzLong }
     "fmt" { Invoke-Fmt }
     "vet" { Invoke-Vet }
     "staticcheck" { Invoke-StaticCheck }

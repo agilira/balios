@@ -1,7 +1,7 @@
 # Go Makefile - AGILira Standard
 # Usage: make help
 
-.PHONY: help test race fmt vet lint security check deps clean build install tools fuzz fuzz-extended fuzz-long
+.PHONY: help test race fmt vet lint security check deps clean build install tools fuzz fuzz-extended
 .DEFAULT_GOAL := help
 
 # Variables
@@ -34,44 +34,25 @@ coverage: ## Run tests with coverage
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)Coverage report generated: coverage.html$(NC)"
 
-fuzz: ## Run fuzz tests (quick - 1 minute each)
-	@echo "$(YELLOW)Running fuzz tests (quick - 1 minute each)...$(NC)"
-	@echo "$(BLUE)This will run all fuzz tests with 1 minute timeout.$(NC)"
+fuzz: ## Run fuzz tests (quick - 30 seconds each, ~3.5 min total)
+	@echo "$(YELLOW)Running fuzz tests (quick - 30 seconds each)...$(NC)"
+	@echo "$(BLUE)Quick feedback loop for development. Total time: ~3.5 minutes$(NC)"
 	@for test in FuzzStringHash FuzzCacheSetGet FuzzCacheConcurrentOperations FuzzGetOrLoad FuzzGetOrLoadWithContext FuzzCacheConfig FuzzCacheMemorySafety; do \
 		echo "$(YELLOW)Running $$test...$(NC)"; \
-		go test -fuzz=$$test -fuzztime=1m || exit 1; \
+		go test -fuzz=$$test -fuzztime=30s || exit 1; \
 		echo "$(GREEN)✓ $$test passed$(NC)"; \
 	done
 	@echo "$(GREEN)All fuzz tests completed successfully!$(NC)"
 
-fuzz-extended: ## Run fuzz tests (extended - 10 minutes each)
-	@echo "$(YELLOW)Running fuzz tests (extended - 10 minutes each)...$(NC)"
-	@echo "$(BLUE)This will take approximately 70 minutes total.$(NC)"
-	@echo "$(BLUE)Recommended for CI/CD or pre-release testing.$(NC)"
+fuzz-extended: ## Run fuzz tests (extended - 5 minutes each, ~35 min total)
+	@echo "$(YELLOW)Running fuzz tests (extended - 5 minutes each)...$(NC)"
+	@echo "$(BLUE)Recommended for pre-commit or PR checks. Total time: ~35 minutes$(NC)"
 	@for test in FuzzStringHash FuzzCacheSetGet FuzzCacheConcurrentOperations FuzzGetOrLoad FuzzGetOrLoadWithContext FuzzCacheConfig FuzzCacheMemorySafety; do \
-		echo "$(YELLOW)Running $$test (10 minutes)...$(NC)"; \
-		go test -fuzz=$$test -fuzztime=10m || exit 1; \
+		echo "$(YELLOW)Running $$test (5 minutes)...$(NC)"; \
+		go test -fuzz=$$test -fuzztime=5m || exit 1; \
 		echo "$(GREEN)✓ $$test passed$(NC)"; \
 	done
 	@echo "$(GREEN)All extended fuzz tests completed successfully!$(NC)"
-
-fuzz-long: ## Run fuzz tests (continuous - 8 hours)
-	@echo "$(YELLOW)Running fuzz tests (continuous - 8 hours)...$(NC)"
-	@echo "$(BLUE)This will run overnight or during extended CI.$(NC)"
-	@echo "$(YELLOW)⚠️  This will take approximately 8 hours!$(NC)"
-	@echo "$(BLUE)Consider running this on a dedicated machine or overnight.$(NC)"
-	@read -p "Continue with 8-hour fuzz testing? (y/N) " -n 1 -r; \
-	echo; \
-	if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
-		echo "$(YELLOW)Fuzz testing cancelled.$(NC)"; \
-		exit 0; \
-	fi
-	@for test in FuzzStringHash FuzzCacheSetGet FuzzCacheConcurrentOperations FuzzGetOrLoad FuzzGetOrLoadWithContext FuzzCacheConfig FuzzCacheMemorySafety; do \
-		echo "$(YELLOW)Running $$test (8 hours)...$(NC)"; \
-		go test -fuzz=$$test -fuzztime=8h || exit 1; \
-		echo "$(GREEN)✓ $$test passed$(NC)"; \
-	done
-	@echo "$(GREEN)All long-running fuzz tests completed!$(NC)"
 
 fmt: ## Format Go code
 	@echo "$(YELLOW)Formatting Go code...$(NC)"

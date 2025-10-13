@@ -125,41 +125,38 @@ Fuzzing is an automated testing technique that provides random, malformed, or un
 
 ## Running Fuzz Tests
 
-### Quick Test (1 minute per fuzz function)
+### Quick Test (30 seconds per fuzz function, ~3.5 min total)
 ```powershell
-# Run all fuzz tests for 1 minute each
-go test -fuzz=FuzzStringHash -fuzztime=1m
-go test -fuzz=FuzzCacheSetGet -fuzztime=1m
-go test -fuzz=FuzzCacheConcurrentOperations -fuzztime=1m
-go test -fuzz=FuzzGetOrLoad -fuzztime=1m
-go test -fuzz=FuzzGetOrLoadWithContext -fuzztime=1m
-go test -fuzz=FuzzCacheConfig -fuzztime=1m
-go test -fuzz=FuzzCacheMemorySafety -fuzztime=1m
+# Run all fuzz tests for 30 seconds each - perfect for development
+go test -fuzz=FuzzStringHash -fuzztime=30s
+go test -fuzz=FuzzCacheSetGet -fuzztime=30s
+go test -fuzz=FuzzCacheConcurrentOperations -fuzztime=30s
+go test -fuzz=FuzzGetOrLoad -fuzztime=30s
+go test -fuzz=FuzzGetOrLoadWithContext -fuzztime=30s
+go test -fuzz=FuzzCacheConfig -fuzztime=30s
+go test -fuzz=FuzzCacheMemorySafety -fuzztime=30s
 ```
 
-### Extended Test (10 minutes per function)
+### Extended Test (5 minutes per function, ~35 min total)
 ```powershell
-# Recommended for CI/CD or pre-release testing
-go test -fuzz=Fuzz -fuzztime=10m
-```
-
-### Continuous Fuzzing (overnight)
-```powershell
-# Run for 8 hours to find deep bugs
-go test -fuzz=Fuzz -fuzztime=8h
+# Recommended for pre-commit hooks or PR checks
+go test -fuzz=Fuzz -fuzztime=5m
 ```
 
 ### Using Makefile Targets
 
 ```powershell
-# Quick fuzz test (1 minute)
+# Quick fuzz test (30 seconds each, ~3.5 min total)
 ./Makefile.ps1 fuzz
 
-# Extended fuzz test (10 minutes)
+# Extended fuzz test (5 minutes each, ~35 min total)
 ./Makefile.ps1 fuzz-extended
+```
 
-# Continuous fuzzing (8 hours)
-./Makefile.ps1 fuzz-long
+**Note**: For continuous fuzzing (overnight/weekend), run individual tests manually:
+```powershell
+# Run specific test for extended period (e.g., overnight)
+go test -fuzz=FuzzStringHash -fuzztime=8h
 ```
 
 ## Interpreting Results
@@ -193,9 +190,15 @@ When a failure is found:
 ## Best Practices
 
 ### 1. Run Fuzz Tests Regularly
-- **During development**: Quick fuzz (1 minute) before each commit
-- **In CI/CD**: Extended fuzz (10 minutes) on pull requests
-- **Pre-release**: Continuous fuzz (8+ hours) before major releases
+- **During development**: Quick fuzz (30 sec) - fast feedback loop
+- **Pre-commit**: Extended fuzz (5 min) - catches most issues
+- **In CI/CD**: Quick fuzz (30 sec) on every PR - keeps CI fast
+- **Pre-release**: Extended fuzz (5 min) or manual overnight run
+
+**Why short times?**
+- GitHub Actions minutes are limited and cost money
+- 30 seconds is enough to find most common bugs
+- Corpus accumulates over time, making subsequent runs more effective
 
 ### 2. Monitor Coverage
 ```powershell
@@ -240,17 +243,44 @@ Balios fuzz tests are optimized for speed while maintaining quality.
 
 ## Continuous Fuzzing in CI
 
-### GitHub Actions Example
+### GitHub Actions Example (Pragmatic Approach)
 ```yaml
 name: Fuzz Testing
 on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  # Optional: weekly deep fuzz
   schedule:
-    - cron: '0 2 * * *'  # Daily at 2 AM
-  workflow_dispatch:  # Manual trigger
+    - cron: '0 2 * * 0'  # Sunday at 2 AM
 
 jobs:
-  fuzz:
+  # Fast fuzzing on every PR (saves GitHub Actions minutes)
+  fuzz-quick:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Quick Fuzz Test (30 sec each)
+        run: |
+          go test -fuzz=FuzzStringHash -fuzztime=30s
+          go test -fuzz=FuzzCacheSetGet -fuzztime=30s
+          go test -fuzz=FuzzCacheConcurrentOperations -fuzztime=30s
+      - name: Upload Corpus
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: testdata/fuzz/
+
+  # Extended fuzzing weekly (more thorough but uses more minutes)
+  fuzz-extended:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
     strategy:
       matrix:
         fuzz-test:
@@ -266,8 +296,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-      - name: Run Fuzz Test
-        run: go test -fuzz=${{ matrix.fuzz-test }} -fuzztime=10m
+      - name: Extended Fuzz Test (5 min)
+        run: go test -fuzz=${{ matrix.fuzz-test }} -fuzztime=5m
       - name: Upload Corpus
         if: always()
         uses: actions/upload-artifact@v4
@@ -275,7 +305,6 @@ jobs:
           name: fuzz-corpus-${{ matrix.fuzz-test }}
           path: testdata/fuzz/
 ```
-
 ## Troubleshooting
 
 ### Fuzzing is Slow

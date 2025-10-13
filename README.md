@@ -1,46 +1,61 @@
-# Balios
+# Balios: High-performance in-memory cache library for Go
+### an AGILira fragment
 
-> High-performance in-memory cache library for Go
-
-Balios is an in-memory cache implementation based on the W-TinyLFU (Window Tiny Least Frequently Used) algorithm, designed for high throughput and optimal hit ratios.
-
-## Performance
-
-Benchmarked on AMD Ryzen 5 7520U, race detector enabled:
-
-**Single-Threaded Operations:**
-- Set: 135.1 ns/op (1 allocation)
-- Get: 113.4 ns/op (0 allocations)
-- GetOrLoad (cache hit): 20.3 ns/op (0 allocations)
-
-**Parallel Mixed Workloads:**
-- Balanced (50/50 read/write): 45.6 ns/op
-- Read-heavy (90/10 read/write): 39.4 ns/op
-- Read-only: 34.8 ns/op
-
-**Hit Ratio (1M requests, Zipf distribution):**
-- Balios: 79.27%
-- Otter: 79.68%
-- Ristretto: 62.77%
-
-**Singleflight Efficiency:**
-- 1000 concurrent requests for same missing key = 1 loader execution
-
-See [benchmarks/](benchmarks/) for detailed comparison with Otter and Ristretto.
+Balios is an in-memory cache implementation based on the W-TinyLFU (Window Tiny Least Frequently Used) algorithm, designed for high throughput and optimal hit ratios with advanced security and observability.
 
 ## Features
 
 - **Type-Safe Generics API**: `GenericCache[K comparable, V any]` with compile-time type safety
 - **Automatic Loading**: `GetOrLoad()` API with singleflight pattern for cache stampede prevention
 - **W-TinyLFU Algorithm**: Combines frequency and recency for optimal eviction decisions
-- **Lock-Free Operations**: Uses atomic primitives for high concurrency
+- **Lock-Free**: Uses atomic primitives for high concurrency
 - **TTL Support**: Automatic expiration with lazy cleanup
 - **Context Support**: Timeout and cancellation for loader functions
-- **Hot Configuration Reload**: Dynamic updates via [Argus](https://github.com/agilira/argus) file watcher
-- **Structured Errors**: Rich error context with [go-errors](https://github.com/agilira/go-errors)
-- **Enterprise Observability**: OpenTelemetry integration for metrics (p50/p95/p99 latencies, hit ratio)
-- **Race-Free**: All tests pass with `-race` detector
-- **Production Ready**: 76 tests, gosec validated, zero security issues
+- **Hot Reload**: Dynamic configuration updates via [Argus](https://github.com/agilira/argus)
+- **Structured Errors**: Rich error context with [go-errors](https://github.com/agilira/go-errors) - see [examples/errors/](examples/errors/)
+- **Observability**: OpenTelemetry integration for metrics (p50/p95/p99 latencies, hit ratio) & logger interface. Zero overhead when disabled (compiler eliminates no-op implementations) - see [examples/otel-prometheus/](examples/otel-prometheus/)
+- **Secure by Design**: [Red-team tested](balios_security_test.go) and [fuzz tested](balios_fuzz_test.go)
+
+## Performance
+
+**Single-Threaded Performance:**
+
+| Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
+| :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
+| **Balios** | **131.3 ns/op** | **+0%** | **105.5 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 139.0 ns/op | +6% | 108.8 ns/op | +3% | 1/0 allocs/op |
+| Otter | 338.7 ns/op | +158% | 120.1 ns/op | +14% | 1/0 allocs/op |
+| Ristretto | 282.7 ns/op | +115% | 156.6 ns/op | +48% | 2/0 allocs/op |
+
+**Parallel Performance (8 cores):**
+
+| Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
+| :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
+| **Balios** | **39.90 ns/op** | **+0%** | **30.06 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 42.21 ns/op | +6% | 32.34 ns/op | +8% | 1/0 allocs/op |
+| Otter | 230.8 ns/op | +478% | 27.62 ns/op | -8% | 1/0 allocs/op |
+| Ristretto | 114.7 ns/op | +187% | 35.42 ns/op | +18% | 1/0 allocs/op |
+
+**Mixed Workloads (Realistic Scenarios):**
+
+| Workload | Balios | Balios-Generic | Otter | Ristretto | Best |
+| :------- | -----: | -------------: | ----: | --------: | :--- |
+| Write-Heavy (10% R / 90% W) | **42.47 ns/op** | 44.86 ns/op | 211.6 ns/op | 125.4 ns/op | **Balios** |
+| Balanced (50% R / 50% W) | **41.76 ns/op** | 42.55 ns/op | 149.9 ns/op | 110.2 ns/op | **Balios** |
+| Read-Heavy (90% R / 10% W) | **46.97 ns/op** | 58.68 ns/op | 51.35 ns/op | 81.68 ns/op | **Balios** |
+| Read-Only (100% R) | 34.41 ns/op | 33.94 ns/op | **28.10 ns/op** | 33.02 ns/op | **Otter** |
+
+**Hit Ratio (100K requests, Zipf distribution):**
+
+| Cache | Hit Ratio | Notes |
+| :---- | --------: | :---- |
+| **Balios** | **80.20%** | Statistically equivalent to Otter |
+| Otter | 79.64% | -0.7% (within noise margin) |
+| Ristretto | 71.39% | -11% |
+
+**Test Environment:** AMD Ryzen 5 7520U Go 1.25+
+
+See [benchmarks/](benchmarks/) for comprehensive results and [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed analysis.
 
 ## Installation
 
@@ -50,7 +65,7 @@ go get github.com/agilira/balios
 
 ## Quick Start
 
-### Type-Safe Generic API (Recommended)
+### Type-Safe Generic API
 
 ```go
 package main
@@ -93,47 +108,6 @@ func main() {
 }
 ```
 
-### Enterprise Observability with OpenTelemetry
-
-Monitor cache performance with automatic percentile calculation:
-
-```go
-import (
-    "github.com/agilira/balios"
-    baliosostel "github.com/agilira/balios/otel"
-    "go.opentelemetry.io/otel/exporters/prometheus"
-    "go.opentelemetry.io/otel/sdk/metric"
-)
-
-// Setup OTEL with Prometheus exporter
-exporter, _ := prometheus.New()
-provider := metric.NewMeterProvider(metric.WithReader(exporter))
-
-// Create metrics collector
-metricsCollector, _ := baliosostel.NewOTelMetricsCollector(provider)
-
-// Configure cache with metrics
-cache := balios.NewGenericCache[string, User](balios.Config{
-    MaxSize:          10_000,
-    MetricsCollector: metricsCollector, // Zero overhead if nil
-})
-
-// Metrics automatically collected:
-// - balios_get_latency_ns (histogram with p50, p95, p99, p99.9)
-// - balios_set_latency_ns (histogram)
-// - balios_get_hits_total (counter)
-// - balios_get_misses_total (counter)
-// - balios_evictions_total (counter)
-```
-
-**Architecture:**
-- **Core stays light**: No OTEL dependencies in main module
-- **Optional integration**: `balios/otel` is a separate module
-- **Zero overhead**: MetricsCollector defaults to no-op implementation
-- **Industry standard**: Compatible with Prometheus, Jaeger, DataDog, Grafana
-
-See [otel/README.md](otel/README.md) and [examples/otel-prometheus/](examples/otel-prometheus/) for complete setup with Grafana dashboard.
-
 ### Automatic Loading with GetOrLoad
 
 Prevent cache stampede with singleflight pattern:
@@ -170,22 +144,11 @@ user, err := cache.GetOrLoadWithContext(ctx, "user:123",
 
 See [examples/getorload/](examples/getorload/) for comprehensive examples.
 
-### Legacy Interface API
+## The Philosophy Behind Balios
 
-The non-generic API is still available:
+Balios and his brother Xanthos were the immortal horses of Achilles, born from Zephyros, the swiftest of the Anemoi. They were not merely fast—they were the children of the wind itself, incomparable to mortal steeds. Balios possessed intelligence beyond any horse, an instinct that guided Achilles through every battle with perfect judgment.
 
-```go
-cache := balios.NewCache(balios.Config{
-    MaxSize: 10_000,
-    TTL:     time.Hour,
-})
-
-cache.Set("key", value)
-if value, found := cache.Get("key"); found {
-    user := value.(User)  // Type assertion required
-    fmt.Printf("User: %+v\n", user)
-}
-```
+When Patroclus fell, it was Xanthos who spoke—granted voice by Hera herself—to warn Achilles of his fate. But Balios remained silent, his wisdom expressed not in words but in action, in knowing when to charge and when to wheel away, in the perfect synchrony between horse and hero that transcends command.
 
 ## Documentation
 
@@ -195,118 +158,19 @@ if value, found := cache.Get("key"); found {
 - [Metrics & Observability](docs/METRICS.md) - OpenTelemetry integration, Prometheus queries, monitoring best practices
 - [Error Handling](docs/ERRORS.md) - Structured error codes and contexts
 - [Examples](examples/) - Comprehensive usage examples
-- [Benchmarks](benchmarks/) - Performance comparison with Otter and Ristretto
+- [Benchmarks](benchmarks/) - Performance comparison with popular libraries
+- [otel/README.md](otel/README.md) and [examples/otel-prometheus/](examples/otel-prometheus/) for complete setup with Grafana dashboard.
 
-## Hot Configuration Reload
-
-Enable dynamic configuration updates without restarting:
-
-```go
-import (
-    "time"
-    "github.com/agilira/balios"
-)
-
-func main() {
-    cache := balios.NewCache(balios.DefaultConfig())
-    
-    // Enable hot reload from YAML config file
-    hotConfig, err := balios.NewHotConfig(cache, balios.HotConfigOptions{
-        ConfigPath:   "config.yaml",
-        PollInterval: 1 * time.Second,
-        OnReload: func(oldCfg, newCfg balios.Config) {
-            log.Printf("Config reloaded: MaxSize %d -> %d", 
-                oldCfg.MaxSize, newCfg.MaxSize)
-        },
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer hotConfig.Stop()
-    
-    // Configuration changes are applied automatically
-}
-```
-
-Supported formats: YAML, JSON, TOML, HCL, INI via [Argus](https://github.com/agilira/argus).
-
-## Architecture
-
-**W-TinyLFU Components:**
-- Window Cache: LRU for recent items
-- Main Cache: S-LRU (Segmented LRU) 
-- Frequency Sketch: Count-Min Sketch with decay
-- Admission Policy: Based on frequency and recency
-
-**Dependencies:**
-- [`github.com/agilira/go-errors`](https://github.com/agilira/go-errors) - Structured error handling
-- [`github.com/agilira/go-timecache`](https://github.com/agilira/go-timecache) - High-performance time provider (~121x faster than `time.Now()`)
-- [`github.com/agilira/argus`](https://github.com/agilira/argus) - Configuration file watcher
-
-## Testing
-
-```bash
-# Run all tests
-go test -v ./...
-
-# Run with race detector
-go test -race ./...
-
-# Run benchmarks
-go test -bench=. -benchmem ./...
-
-# Security scan
-gosec ./...
-```
-
-Current status: 69 tests passing, race detector clean, gosec 0 issues.
-
-## Development Status
-
-**Phase 1: Foundation (COMPLETE)**
-- Core interfaces and data structures
-- W-TinyLFU algorithm implementation
-- Lock-free operations with atomic primitives
-- TTL support with lazy expiration
-- Structured error handling (28 error codes)
-- Comprehensive test suite (86.1% coverage)
-
-**Phase 2: Performance & Reliability (COMPLETE)**
-- go-timecache integration (121x faster time)
-- Hot configuration reload with Argus
-- Type-safe Generics API with optimization
-- Race-free implementation (validated with `-race`)
-- Hit ratio validation (79.3%, equivalent to best)
-
-**Phase 3: Advanced Features (COMPLETE)**
-- Automatic Loading with Singleflight (GetOrLoad API)
-- Context support for timeout/cancellation
-- Cache stampede prevention
-- Panic recovery with structured errors
-- 76 comprehensive tests, all passing with `-race`
-
-**Phase 4: OpenTelemetry Integration (COMPLETE)**
-- MetricsCollector interface in core (zero overhead when not used)
-- balios/otel package for OpenTelemetry integration
-- Automatic percentile calculation (p50, p95, p99, p99.9)
-- Prometheus exporter example with Grafana dashboard
-- Hit ratio, eviction rate, and latency monitoring
-
-**Phase 5: Future Enhancements (PLANNED)**
+## Future Enhancements (PLANNED)
 - Async refresh (stale-while-revalidate pattern)
 - Persistence (save/load from disk)
 - Distributed cache coordination
 - Write-through/write-behind patterns
 
-## Contributing
-
-1. Follow TDD approach - write tests first
-2. Maintain zero allocations on hot path
-3. Validate race-free implementation with `-race` detector
-4. Write clean and well-documented code
-5. Use comprehensive error handling
-6. Benchmark every performance-related change
-
 ## License
 
-See [LICENSE](LICENSE) for details.
+Balios is licensed under the [Mozilla Public License 2.0](./LICENSE.md).
+
+---
+
+Balios • an AGILira fragment

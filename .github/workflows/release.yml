@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Solo per tag version (v1.0.0, v1.2.3, etc.)
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  release:
+    name: Release Package
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      with:
+        fetch-depth: 0
+
+    - name: Setup Go
+      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      with:
+        go-version: 'stable'
+
+    - name: Verify Go Module
+      run: |
+        go mod verify
+        go mod tidy
+        
+    - name: Run Tests
+      run: |
+        go test -v ./...
+        
+    - name: Build Package
+      run: |
+        go build -v ./...
+        
+    - name: Create Go Module Checksum
+      run: |
+        go mod download
+        echo "Package ready for Go module proxy"
+        
+    # Il package Go viene automaticamente indicizzato da proxy.golang.org
+    # quando viene pushato un tag git corrispondente
+    - name: Verify Module Publication
+      run: |
+        echo "Go module will be available at:"
+        echo "https://pkg.go.dev/github.com/agilira/balios@${GITHUB_REF#refs/tags/}"

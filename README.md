@@ -1,4 +1,4 @@
-# Balios: High-performance in-memory caching library for Go
+# Balios: High-Performance Caching Library for Go
 
 ![Balios Banner](assets/banner.png)
 
@@ -24,7 +24,7 @@ Balios is a high-performance in-memory caching library for Go, based on W-TinyLF
 - **Hot Reload**: Dynamic configuration updates via [Argus](https://github.com/agilira/argus)
 - **Structured Errors**: Rich error context with [go-errors](https://github.com/agilira/go-errors) - see [examples/errors/](examples/errors/)
 - **Observability**: OpenTelemetry integration for metrics (p50/p95/p99 latencies, hit ratio) & logger interface. Zero overhead when disabled (compiler eliminates no-op implementations) - see [examples/otel-prometheus/](examples/otel-prometheus/)
-- **Secure by Design**: [Red-team tested](balios_security_test.go), [fuzz tested](balios_fuzz_test.go), and fully documented in [SECURITY_REPORT.md](SECURITY_REPORT.md)
+- **Secure by Design**: [Red-team tested](balios_security_test.go) and [fuzz tested](balios_fuzz_test.go) angainst a wide range of attacks
 
 ## Compatibility and Support
 

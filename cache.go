@@ -8,15 +8,16 @@ package balios
 
 import (
 	"sync/atomic"
+	"unsafe"
 )
 
 // entry represents a cache entry with atomic access.
 type entry struct {
-	key      string
-	value    atomic.Value // Thread-safe value storage
-	keyHash  uint64
-	expireAt int64 // expiration timestamp in nanoseconds (0 = no expiration)
-	valid    int32 // atomic flag: 0=empty, 1=valid, 2=deleted, 3=pending
+	keyPtr   unsafe.Pointer // Thread-safe key storage (points to string)
+	value    atomic.Value   // Thread-safe value storage
+	keyHash  uint64         // Thread-safe hash storage (use atomic operations)
+	expireAt int64          // expiration timestamp in nanoseconds (0 = no expiration)
+	valid    int32          // atomic flag: 0=empty, 1=valid, 2=deleted, 3=pending
 }
 
 // wtinyLFUCache implements W-TinyLFU cache with lock-free operations.
@@ -50,6 +51,26 @@ const (
 	entryDeleted = 2
 	entryPending = 3 // Entry being written/updated
 )
+
+// Helper functions for atomic key operations
+func (e *entry) loadKey() string {
+	ptr := atomic.LoadPointer(&e.keyPtr)
+	if ptr == nil {
+		return ""
+	}
+	return *(*string)(ptr)
+}
+
+func (e *entry) storeKey(key string) {
+	if key == "" {
+		atomic.StorePointer(&e.keyPtr, nil)
+		return
+	}
+	// Allocate string on heap to ensure it survives function scope
+	keyPtr := new(string)
+	*keyPtr = key
+	atomic.StorePointer(&e.keyPtr, unsafe.Pointer(keyPtr))
+}
 
 // NewCache creates a new W-TinyLFU cache with lock-free operations.
 func NewCache(config Config) Cache {
@@ -125,14 +146,19 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		// Load current state atomically
 		state := atomic.LoadInt32(&entry.valid)
 
+		// Skip entries being written/updated by other threads
+		if state == entryPending {
+			continue
+		}
+
 		if state == entryEmpty || state == entryDeleted {
 			// Try to claim this slot with entryPending first to prevent races
 			if atomic.CompareAndSwapInt32(&entry.valid, state, entryPending) {
 				// Successfully claimed - populate entry atomically
 				// These writes are safe because we own the slot (valid = entryPending)
 				// and no other goroutine will read it until we set valid = entryValid
-				entry.keyHash = keyHash
-				entry.key = key
+				atomic.StoreUint64(&entry.keyHash, keyHash)
+				entry.storeKey(key)
 				entry.value.Store(value)
 				atomic.StoreInt64(&entry.expireAt, expireAt)
 
@@ -140,7 +166,8 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 				// ensuring all previous writes are visible
 				atomic.StoreInt32(&entry.valid, entryValid)
 
-				if state == entryEmpty {
+				// Increment size for empty or deleted slots (new or reused)
+				if state == entryEmpty || state == entryDeleted {
 					atomic.AddInt64(&c.size, 1)
 				}
 				atomic.AddInt64(&c.sets, 1)
@@ -151,8 +178,13 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 					c.metricsCollector.RecordSet(latency)
 				}
 
-				// Check if eviction needed
-				if atomic.LoadInt64(&c.size) > int64(c.maxSize) {
+				// Critical: Check for duplicates to maintain cache consistency
+				// In high concurrency, multiple threads might create the same key
+				c.removeDuplicateKeys(key, keyHash, entry)
+
+				// Check if eviction needed AFTER incrementing size
+				currentSize := atomic.LoadInt64(&c.size)
+				if currentSize > int64(c.maxSize) {
 					c.evictOne()
 				}
 				return true
@@ -163,11 +195,11 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 
 		// Check if this is an update to existing key
 		// We need to be careful about race conditions here
-		if state == entryValid && entry.keyHash == keyHash {
+		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
 			// Try to acquire the entry for update by marking it as pending
 			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
 				// Check if this is really the same key (now safe to read)
-				if entry.key == key {
+				if storedKey := entry.loadKey(); storedKey == key {
 					// Update value atomically
 					entry.value.Store(value)
 					atomic.StoreInt64(&entry.expireAt, expireAt)
@@ -191,8 +223,45 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		}
 	}
 
-	// Table full - try eviction once
+	// Table full - try eviction and retry insertion
 	c.evictOne()
+
+	// After eviction, try one more time to find a slot
+	for i := uint32(0); i <= c.tableMask; i++ {
+		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
+		entry := &c.entries[idx]
+
+		state := atomic.LoadInt32(&entry.valid)
+
+		if state == entryEmpty || state == entryDeleted {
+			// Try to claim this slot
+			if atomic.CompareAndSwapInt32(&entry.valid, state, entryPending) {
+				// Successfully claimed - populate entry atomically
+				atomic.StoreUint64(&entry.keyHash, keyHash)
+				entry.storeKey(key)
+				entry.value.Store(value)
+				atomic.StoreInt64(&entry.expireAt, expireAt)
+
+				// Mark entry as valid
+				atomic.StoreInt32(&entry.valid, entryValid)
+
+				// Increment size for empty or deleted slots (new or reused)
+				if state == entryEmpty || state == entryDeleted {
+					atomic.AddInt64(&c.size, 1)
+				}
+				atomic.AddInt64(&c.sets, 1)
+
+				// Record metrics for successful Set
+				if c.metricsCollector != nil {
+					latency := c.timeProvider.Now() - startTime
+					c.metricsCollector.RecordSet(latency)
+				}
+				return true
+			}
+		}
+	}
+
+	// Still no space available - this should be rare
 	return false
 }
 
@@ -229,14 +298,14 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 			continue
 		}
 
-		if state == entryValid && entry.keyHash == keyHash {
+		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
 			// Read key atomically by checking state before and after
 			// This ensures we don't read partially written data
 			if atomic.LoadInt32(&entry.valid) != entryValid {
 				continue
 			}
 
-			if entry.key == key {
+			if storedKey := entry.loadKey(); storedKey == key {
 				// Check if entry has expired
 				if c.ttlNanos > 0 {
 					expireAt := atomic.LoadInt64(&entry.expireAt)
@@ -312,16 +381,16 @@ func (c *wtinyLFUCache) Delete(key string) bool {
 			continue
 		}
 
-		if state == entryValid && entry.keyHash == keyHash {
+		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
 			// Check state is still valid
 			if atomic.LoadInt32(&entry.valid) != entryValid {
 				continue
 			}
 
-			if entry.key == key {
+			if storedKey := entry.loadKey(); storedKey == key {
 				// Mark as deleted atomically
 				if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
-					entry.key = ""
+					entry.storeKey("")
 					// Note: we don't clear value as atomic.Value can't store nil
 					// and it will be overwritten when entry is reused
 					atomic.AddInt64(&c.size, -1)
@@ -361,13 +430,13 @@ func (c *wtinyLFUCache) Has(key string) bool {
 			continue
 		}
 
-		if state == entryValid && entry.keyHash == keyHash {
+		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
 			// Check state is still valid
 			if atomic.LoadInt32(&entry.valid) != entryValid {
 				continue
 			}
 
-			if entry.key == key {
+			if storedKey := entry.loadKey(); storedKey == key {
 				return true
 			}
 		}
@@ -391,9 +460,9 @@ func (c *wtinyLFUCache) Clear() {
 	// Reset all entries
 	for i := range c.entries {
 		atomic.StoreInt32(&c.entries[i].valid, entryEmpty)
-		c.entries[i].key = ""
+		c.entries[i].storeKey("")
 		// Note: we don't clear value as atomic.Value can't store nil
-		c.entries[i].keyHash = 0
+		atomic.StoreUint64(&c.entries[i].keyHash, 0)
 	}
 
 	// Reset counters
@@ -430,63 +499,121 @@ func (c *wtinyLFUCache) Close() error {
 // evictOne performs W-TinyLFU eviction by finding the entry with lowest frequency.
 // Uses a sampling approach to avoid scanning the entire table.
 func (c *wtinyLFUCache) evictOne() {
-	const sampleSize = 5 // Sample 5 random entries to find victim
+	const sampleSize = 8 // Increased sample size for better victim selection
+	const maxRetries = 3 // Max retries to find a victim
 
-	var victim *entry
-	minFrequency := uint64(^uint64(0)) // Max uint64
-
-	// Sample random entries to find the one with lowest frequency
-	// This is much faster than scanning the entire table
 	tableSize := int(c.tableMask) + 1
-	step := tableSize / sampleSize
-	if step < 1 {
-		step = 1
-	}
 
-	for i := 0; i < sampleSize; i++ {
-		idx := (i * step) % tableSize
-		entry := &c.entries[idx]
-		state := atomic.LoadInt32(&entry.valid)
+	// Try multiple rounds of sampling before giving up
+	for retry := 0; retry < maxRetries; retry++ {
+		var victim *entry
+		minFrequency := uint64(^uint64(0)) // Max uint64
 
-		if state == entryValid {
-			// Check frequency using the sketch
-			freq := c.sketch.estimate(entry.keyHash)
+		// Use pseudo-random sampling based on current retry
+		start := (retry * 17) % tableSize // Prime number for better distribution
+		step := tableSize / sampleSize
+		if step < 1 {
+			step = 1
+		}
 
-			if freq < minFrequency {
-				minFrequency = freq
-				victim = entry
+		// Sample entries with better distribution
+		for i := 0; i < sampleSize; i++ {
+			idx := (start + i*step) % tableSize
+			entry := &c.entries[idx]
+			state := atomic.LoadInt32(&entry.valid)
+
+			if state == entryValid {
+				// Check frequency using the sketch
+				freq := c.sketch.estimate(atomic.LoadUint64(&entry.keyHash))
+
+				if freq < minFrequency {
+					minFrequency = freq
+					victim = entry
+				}
+			}
+		}
+
+		// If we found a victim, try to evict it
+		if victim != nil {
+			if atomic.CompareAndSwapInt32(&victim.valid, entryValid, entryDeleted) {
+				victim.storeKey("")
+				// Note: we don't clear value as atomic.Value can't store nil
+				atomic.AddInt64(&c.size, -1)
+				atomic.AddInt64(&c.evictions, 1)
+
+				// Record eviction metrics
+				if c.metricsCollector != nil {
+					c.metricsCollector.RecordEviction()
+				}
+				return
 			}
 		}
 	}
 
-	// If we found a victim, try to evict it
-	if victim != nil {
-		if atomic.CompareAndSwapInt32(&victim.valid, entryValid, entryDeleted) {
-			victim.key = ""
-			// Note: we don't clear value as atomic.Value can't store nil
-			atomic.AddInt64(&c.size, -1)
-			atomic.AddInt64(&c.evictions, 1)
-
-			// Record eviction metrics
-			if c.metricsCollector != nil {
-				c.metricsCollector.RecordEviction()
-			}
-			return
-		}
+	// Last resort: scan a larger portion of the table to ensure we find a victim
+	// In high-load scenarios, we need to be more aggressive
+	scanSize := tableSize / 4 // Scan 1/4 of the table (more aggressive)
+	if scanSize < 16 {
+		scanSize = 16
+	}
+	if scanSize > tableSize {
+		scanSize = tableSize
 	}
 
-	// Fallback: if sampling failed, do a simple linear scan
-	for i := range c.entries {
+	for i := 0; i < scanSize; i++ {
 		entry := &c.entries[i]
 		state := atomic.LoadInt32(&entry.valid)
 
 		if state == entryValid {
 			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
-				entry.key = ""
+				entry.storeKey("")
 				// Note: we don't clear value as atomic.Value can't store nil
 				atomic.AddInt64(&c.size, -1)
 				atomic.AddInt64(&c.evictions, 1)
+
+				// Record eviction metrics
+				if c.metricsCollector != nil {
+					c.metricsCollector.RecordEviction()
+				}
 				return
+			}
+		}
+	}
+}
+
+// removeDuplicateKeys removes any duplicate entries for the same key
+// This is a safety mechanism to handle race conditions in concurrent Set operations
+// Uses a limited scan around the hash position for performance
+func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntry *entry) {
+	// Scan a limited range around the original hash position
+	startIdx := keyHash & uint64(c.tableMask)
+
+	// Scan a reasonable window (not the entire table)
+	scanRange := uint32(32) // Check up to 32 positions
+	if scanRange > c.tableMask {
+		scanRange = c.tableMask
+	}
+
+	for i := uint32(0); i < scanRange; i++ {
+		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
+		entry := &c.entries[idx]
+
+		// Skip the entry we want to keep
+		if entry == keepEntry {
+			continue
+		}
+
+		// Check if this entry has the same key
+		state := atomic.LoadInt32(&entry.valid)
+		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
+			// Double-check the actual key to avoid hash collisions
+			if storedKey := entry.loadKey(); storedKey == key {
+				// Found a duplicate - remove it
+				if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
+					entry.storeKey("")
+					atomic.AddInt64(&c.size, -1)
+					// Note: we don't increment evictions counter as this is a cleanup operation
+				}
 			}
 		}
 	}

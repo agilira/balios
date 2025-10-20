@@ -8,7 +8,7 @@ Balios is a high-performance in-memory caching library for Go, based on W-TinyLF
 [![CodeQL](https://github.com/agilira/balios/actions/workflows/codeql.yml/badge.svg)](https://github.com/agilira/balios/actions/workflows/codeql.yml)
 [![Security](https://img.shields.io/badge/security-gosec-brightgreen.svg)](https://github.com/agilira/balios/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/agilira/balios)](https://goreportcard.com/report/github.com/agilira/balios)
-[![Test Coverage](https://img.shields.io/badge/coverage-88.8%25-brightgreen)](https://github.com/agilira/balios)
+[![Test Coverage](https://img.shields.io/badge/coverage-87.4%25-brightgreen)](https://github.com/agilira/balios)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11297/badge)](https://www.bestpractices.dev/projects/11297)
 
 **[Features](#features) • [Quick Start](#quick-start) • [Performance](#performance) • [Observability Architecture](#observability-architecture) • [Philosophy](#the-philosophy-behind-balios) • [Documentation](#documentation)**
@@ -87,36 +87,36 @@ func main() {
 
 | Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
 | :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **131.3 ns/op** | **+0%** | **105.5 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 139.0 ns/op | +6% | 108.8 ns/op | +3% | 1/0 allocs/op |
-| Otter | 338.7 ns/op | +158% | 120.1 ns/op | +14% | 1/0 allocs/op |
-| Ristretto | 282.7 ns/op | +115% | 156.6 ns/op | +48% | 2/0 allocs/op |
+| **Balios** | **147.7 ns/op** | **+0%** | **124.2 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 154.8 ns/op | +5% | 121.1 ns/op | -3% | 1/0 allocs/op |
+| Otter | 375.3 ns/op | +154% | 124.4 ns/op | +0% | 1/0 allocs/op |
+| Ristretto | 305.9 ns/op | +107% | 162.7 ns/op | +31% | 2/0 allocs/op |
 
 **Parallel Performance (8 cores):**
 
 | Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
 | :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **39.90 ns/op** | **+0%** | **30.06 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 42.21 ns/op | +6% | 32.34 ns/op | +8% | 1/0 allocs/op |
-| Otter | 230.8 ns/op | +478% | 27.62 ns/op | -8% | 1/0 allocs/op |
-| Ristretto | 114.7 ns/op | +187% | 35.42 ns/op | +18% | 1/0 allocs/op |
+| **Balios** | **52.73 ns/op** | **+0%** | **32.59 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 56.92 ns/op | +8% | 34.51 ns/op | +6% | 1/0 allocs/op |
+| Otter | 250.3 ns/op | +375% | 25.95 ns/op | -20% | 1/0 allocs/op |
+| Ristretto | 124.3 ns/op | +136% | 34.27 ns/op | +5% | 1/0 allocs/op |
 
 **Mixed Workloads (Realistic Scenarios):**
 
 | Workload | Balios | Balios-Generic | Otter | Ristretto | Best |
 | :------- | -----: | -------------: | ----: | --------: | :--- |
-| Write-Heavy (10% R / 90% W) | **42.47 ns/op** | 44.86 ns/op | 211.6 ns/op | 125.4 ns/op | **Balios** |
-| Balanced (50% R / 50% W) | **41.76 ns/op** | 42.55 ns/op | 149.9 ns/op | 110.2 ns/op | **Balios** |
-| Read-Heavy (90% R / 10% W) | **46.97 ns/op** | 58.68 ns/op | 51.35 ns/op | 81.68 ns/op | **Balios** |
-| Read-Only (100% R) | 34.41 ns/op | 33.94 ns/op | **28.10 ns/op** | 33.02 ns/op | **Otter** |
+| Write-Heavy (10% R / 90% W) | **58.99 ns/op** | 84.22 ns/op | 414.7 ns/op | 159.8 ns/op | **Balios** |
+| Balanced (50% R / 50% W) | **59.12 ns/op** | 58.71 ns/op | 155.2 ns/op | 131.9 ns/op | **Balios** |
+| Read-Heavy (90% R / 10% W) | **40.80 ns/op** | 39.85 ns/op | 72.82 ns/op | 77.92 ns/op | **Balios** |
+| Read-Only (100% R) | 35.11 ns/op | 36.09 ns/op | **27.81 ns/op** | 36.42 ns/op | **Otter** |
 
 **Hit Ratio (100K requests, Zipf distribution):**
 
 | Cache | Hit Ratio | Notes |
 | :---- | --------: | :---- |
-| **Balios** | **80.20%** | Statistically equivalent to Otter |
-| Otter | 79.64% | -0.7% (within noise margin) |
-| Ristretto | 71.39% | -11% |
+| **Balios** | **80.08%** | Statistically equivalent to Otter |
+| Otter | 79.68% | -0.5% (within noise margin) |
+| Ristretto | 65.22% | -18.5% |
 
 **Test Environment:** AMD Ryzen 5 7520U Go 1.25+
 
@@ -152,7 +152,7 @@ user, err := cache.GetOrLoadWithContext(ctx, "user:123",
 ```
 
 **Key characteristics:**
-- Cache hit: 20.3 ns/op (0 allocations) - same performance as `Get()`
+- Cache hit: Same performance as `Get()` operations (32.59 ns/op parallel, 0 allocations)
 - Concurrent requests: 1000 simultaneous requests = 1 loader call (singleflight)
 - Error handling: Loader errors are NOT cached (prevents error amplification)
 - Panic recovery: Returns `BALIOS_PANIC_RECOVERED` error if loader panics

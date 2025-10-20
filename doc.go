@@ -4,7 +4,7 @@
 // # Overview
 //
 // Balios is designed for production use with focus on:
-//   - Performance: 108.8 ns/op Get, 131.1 ns/op Set (AMD Ryzen 5 7520U)
+//   - Performance: 124.2 ns/op Get, 147.7 ns/op Set (AMD Ryzen 5 7520U)
 //   - Concurrency: Lock-free operations using atomic primitives
 //   - Type Safety: Generic API with compile-time type checking
 //   - Observability: OpenTelemetry integration (optional separate package)
@@ -76,7 +76,7 @@
 //	    })
 //
 // Key characteristics of GetOrLoad:
-//   - Cache hit: 20.3 ns/op (same as Get)
+//   - Cache hit: Same performance as Get() (33.60 ns/op parallel)
 //   - Concurrent requests: N requests = 1 loader call (singleflight)
 //   - Error handling: Loader errors are NOT cached
 //   - Panic recovery: Returns BALIOS_PANIC_RECOVERED error if loader panics
@@ -104,8 +104,8 @@
 //   - Thread-Safe: All operations safe for concurrent use
 //
 // Benchmark with 8 goroutines:
-//   - Get: 108.8 ns/op (8 parallel)
-//   - Set: 131.1 ns/op (8 parallel)
+//   - Get: 33.60 ns/op (8 parallel)
+//   - Set: 60.24 ns/op (8 parallel)
 //   - No deadlocks or race conditions
 //
 // # TTL (Time To Live)
@@ -246,12 +246,12 @@
 //
 // # Performance
 //
-// Benchmark results(AMD Ryzen 5 7520U, Go 1.25.1
+// Benchmark results (AMD Ryzen 5 7520U, Go 1.25.1):
 //
-//	BenchmarkCache_Set-8                    9151855    131.1 ns/op     0 B/op    0 allocs/op
-//	BenchmarkCache_Get-8                    11033690   108.8 ns/op     0 B/op    0 allocs/op
-//	BenchmarkCache_Get_Parallel-8           40891591   29.24 ns/op     0 B/op    0 allocs/op
-//	BenchmarkGenericCache_GetOrLoad_Hit-8   59169024   20.30 ns/op     0 B/op    0 allocs/op
+//	BenchmarkCache_Set-8                    6758980    147.7 ns/op     1 B/op    1 allocs/op
+//	BenchmarkCache_Get-8                    8045678    124.2 ns/op     0 B/op    0 allocs/op
+//	BenchmarkCache_Get_Parallel-8           29738515   33.60 ns/op     0 B/op    0 allocs/op
+//	BenchmarkGenericCache_GetOrLoad_Hit-8   Same as Get performance (cache hit)
 //
 // Key characteristics:
 //   - Zero allocations on hot path (Get/Set)

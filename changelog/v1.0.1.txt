@@ -1,0 +1,72 @@
+# Changelog - Version 1.0.1
+
+## Release Date
+2025-10-20
+
+## Overview
+Documentation and API consistency improvements for v1.0.1. This patch release focuses on ensuring perfect alignment between GoDoc documentation, API.md reference, and actual implementation. All public APIs are now completely documented with consistent examples and accurate method signatures.
+
+## #Corrected
+- **API.md Documentation Corrections**:
+  - Fixed `HitRatio()` usage in examples - method already returns percentage (0-100), removed incorrect `*100` multiplication
+  - Added missing `Len() int` and `Capacity() int` methods documentation for GenericCache
+  - Clarified that `GenericCache.Set(key, value)` returns void (not bool like base Cache interface)
+  - Clarified that `GenericCache.Delete(key)` returns void (not bool like base Cache interface)
+  - Corrected method signatures to match actual implementation
+
+- **GoDoc Documentation Review**:
+  - Verified complete coverage of all public APIs, types, and methods
+  - Confirmed consistency between interface documentation and implementation
+  - Validated all examples and code snippets for accuracy
+  - Ensured performance metrics align with actual benchmark results
+
+## #Validated
+- **Complete Documentation Coverage**:
+  - `balios.go` - Package constants and version information
+  - `cache.go` and `cache_generic.go` - Core cache implementations
+  - `loading.go` and `loading_generic.go` - GetOrLoad functionality
+  - `config.go` - Configuration types and validation
+  - `errors.go` - Structured error system (28 error codes)
+  - `interfaces.go` - Public interfaces and contracts
+  - `hot-reload.go` and `sketch.go` - Advanced features
+  - `otel/` package - OpenTelemetry integration
+  - `doc.go` - Comprehensive package documentation
+
+- **API Reference Accuracy**:
+  - All method signatures match implementation
+  - Examples use correct return types and patterns
+  - Performance metrics reflect actual benchmark results
+  - Error handling examples use proper error codes
+
+## #Quality Improvements
+- **Documentation Standards**:
+  - Professional GoDoc format throughout codebase
+  - Consistent example patterns and coding style
+  - Complete parameter and return value documentation
+  - Thread safety and performance characteristics clearly documented
+
+- **API Consistency**:
+  - Generic vs non-generic API differences clearly explained
+  - Method return types accurately documented
+  - Interface contracts properly specified
+  - Usage patterns and best practices included
+
+## #Impact
+- **Developer Experience**: Perfect alignment between documentation and implementation
+- **Production Readiness**: All APIs fully documented for enterprise adoption
+- **Maintenance**: Consistent documentation standards for future development
+- **Zero Breaking Changes**: Pure documentation improvements, no API changes
+
+## #Files Changed
+- `docs/API.md` - Corrected method signatures and examples
+- Minor GoDoc improvements for consistency
+- No changes to implementation code or behavior
+
+## #Compatibility
+- **Fully Backward Compatible**: No API changes, only documentation corrections
+- **Go Version**: 1.23+ (unchanged)
+- **Dependencies**: No changes to dependency versions
+- **Zero Runtime Impact**: Documentation-only changes
+
+---
+Balios v1.0.1 • an AGILira fragment

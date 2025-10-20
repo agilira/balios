@@ -15,7 +15,7 @@ This guide explains how to monitor balios cache performance using the MetricsCol
 
 ## Overview
 
-Balios provides enterprise-grade observability through a clean separation of concerns:
+Balios provides professional-grade observability through a clean separation of concerns:
 
 1. **Core Module** (`github.com/agilira/balios`): Defines the `MetricsCollector` interface
 2. **OTEL Package** (`github.com/agilira/balios/otel`): Implements OpenTelemetry integration
@@ -579,26 +579,6 @@ func (c *AtomicMetricsCollector) HitRatio() float64 {
     return float64(hits) / float64(total)
 }
 ```
-
-## Performance Considerations
-
-### Overhead Comparison
-
-| Implementation | Overhead | Notes |
-|----------------|----------|-------|
-| NoOpMetricsCollector | 0% | Inlined by compiler |
-| OTelMetricsCollector | ~5% | Lock-free OTEL instruments |
-| Custom Atomic | ~2-3% | Lock-free atomic operations |
-| Custom with Mutex | ~10-20% | Lock contention possible |
-| Network-based (StatsD) | ~50-100% | Network I/O overhead |
-
-### Recommendations
-
-1. **Production**: Use OTelMetricsCollector (~5% overhead acceptable)
-2. **Low-latency services**: Use NoOp or custom atomic collector
-3. **Testing**: Use custom atomic collector for in-process stats
-4. **Development**: Any collector (overhead not critical)
-
 ### Minimizing Overhead
 
 1. **Avoid locks**: Use atomic operations or lock-free data structures
@@ -628,21 +608,6 @@ func (c *SamplingCollector) RecordGet(latencyNs int64, hit bool) {
 - [examples/otel-prometheus/](../examples/otel-prometheus/) - Complete example with Grafana
 - [ARCHITECTURE.md](ARCHITECTURE.md) - W-TinyLFU internals
 - [PERFORMANCE.md](PERFORMANCE.md) - Benchmark results
-
-## Summary
-
-Balios provides professional observability through:
-
-**Clean Interface**: `MetricsCollector` interface in core  
-**Zero Overhead Default**: NoOp implementation when not needed  
-**OTEL Integration**: Separate package for enterprise monitoring  
-**Extensible**: Easy to implement custom collectors  
-**Production Ready**: <5% overhead with OTelMetricsCollector  
-
-Choose the monitoring solution that fits your needs:
-- **No monitoring**: Default NoOp (zero overhead)
-- **OpenTelemetry**: Use `balios/otel` package (industry standard)
-- **Custom**: Implement MetricsCollector interface
 
 ---
 

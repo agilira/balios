@@ -175,15 +175,6 @@ const (
 - **Fair comparison**: All caches configured with equivalent capacity
 - **Realistic workload**: Zipf distribution matches real-world access patterns
 
-## Next Steps
-
-After running benchmarks:
-1. Document baseline performance in `study/ANALYSIS.md`
-2. Identify performance gaps
-3. Prioritize optimizations based on impact
-4. Implement improvements
-5. Re-benchmark to validate
-
 ## Quick Start
 
 ```bash

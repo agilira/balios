@@ -81,21 +81,6 @@ func (c Cache) GetOrLoadWithContext(
 ) (interface{}, error)
 ```
 
-## Performance Characteristics
-
-From real benchmarks (`loading_bench_test.go`):
-
-| Scenario | Performance | Allocations | Notes |
-|----------|-------------|-------------|-------|
-| **Cache Hit** | 20.3 ns/op | 0 allocs | Same as Get() |
-| **Cache Miss** | Loader time + overhead | 1 alloc | Minimal overhead |
-| **Singleflight** | 1 loader call | Amortized | 1000x efficiency |
-
-**Key Insights:**
-- Cache hit performance: Identical to `Get()` (no overhead)
-- Cache miss overhead: Only +3.6ns vs manual Get+Set pattern
-- Concurrent efficiency: Proven 1000x with atomic counter validation
-
 ## Usage Examples
 
 ### Example 1: Basic Usage
@@ -642,7 +627,7 @@ for _, id := range userIDs {
 
 wg.Wait()
 ```
-## References
+## Code References
 
 - Implementation: [`loading.go`](../loading.go), [`loading_generic.go`](../loading_generic.go)
 - Tests: [`loading_test.go`](../loading_test.go), [`loading_generic_test.go`](../loading_generic_test.go)

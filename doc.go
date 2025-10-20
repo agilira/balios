@@ -246,7 +246,7 @@
 //
 // # Performance
 //
-// Benchmark results (AMD Ryzen 5 7520U @ 2.80GHz, 8 cores):
+// Benchmark results(AMD Ryzen 5 7520U, Go 1.25.1
 //
 //	BenchmarkCache_Set-8                    9151855    131.1 ns/op     0 B/op    0 allocs/op
 //	BenchmarkCache_Get-8                    11033690   108.8 ns/op     0 B/op    0 allocs/op
@@ -362,17 +362,12 @@
 //
 // # Packages
 //
-//   - github.com/agilira/balios: Core cache implementation (zero external dependencies)
+//   - github.com/agilira/balios: Core cache implementation
 //   - github.com/agilira/balios/otel: OpenTelemetry integration (separate module)
 //
 // # License
 //
 // See LICENSE file in the repository.
 //
-// # Version
-//
-// # Authors
-//
-// Maintained by AGILira team.
 // Contributions welcome at https://github.com/agilira/balios
 package balios

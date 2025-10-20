@@ -89,26 +89,6 @@ BenchmarkGetOrLoad_Concurrent_Singleflight  # 1000x efficiency validated
 
 **Note**: CacheMiss benchmark includes loader execution time. Pure overhead is minimal.
 
-## Comparison with Competitors
-
-### Otter (v2)
-
-| Operation | Balios | Otter | Speedup |
-|-----------|--------|-------|---------|
-| **Set** | 131.1 ns/op | 347.3 ns/op | **2.65x faster** |
-| **Get** | 108.8 ns/op | 127.0 ns/op | **1.17x faster** |
-| **Balanced** | 42.00 ns/op | 143.2 ns/op | **3.41x faster** |
-
-### Ristretto (v2)
-
-| Operation | Balios | Ristretto | Speedup |
-|-----------|--------|-----------|---------|
-| **Set** | 131.1 ns/op | 291.1 ns/op | **2.22x faster** |
-| **Get** | 108.8 ns/op | 161.7 ns/op | **1.49x faster** |
-| **Balanced** | 42.00 ns/op | 123.9 ns/op | **2.95x faster** |
-
-**Verdict**: Balios is consistently faster across all operations.
-
 ## Hit Ratio Analysis
 
 Extended test results (1M requests, Zipf distribution):
@@ -164,13 +144,6 @@ Example (maxSize = 10,000):
 - Frequency sketch: 625 * 8 bytes = 5 KB
 - Total: ~965 KB
 ```
-
-### Garbage Collection Impact
-
-Zero allocations on Get operations means:
-- No GC pressure from cache reads
-- Minimal GC pauses in read-heavy workloads
-- Predictable latency characteristics
 
 ## Scalability
 
@@ -228,7 +201,7 @@ Performance vs cache size:
 - Lock-free atomic increments
 
 ### 6. Time Provider [go-timecache](https://github.com/agilira/go-timecache)
-- Cached time updates (121x faster)
+- Cached time updates
 - Shared across all caches
 - Dedicated goroutine for updates
 

@@ -195,11 +195,6 @@ When a failure is found:
 - **In CI/CD**: Quick fuzz (30 sec) on every PR - keeps CI fast
 - **Pre-release**: Extended fuzz (5 min) or manual overnight run
 
-**Why short times?**
-- GitHub Actions minutes are limited and cost money
-- 30 seconds is enough to find most common bugs
-- Corpus accumulates over time, making subsequent runs more effective
-
 ### 2. Monitor Coverage
 ```powershell
 # Generate coverage report during fuzzing
@@ -220,14 +215,6 @@ Fuzzing complements but doesn't replace:
 - Benchmark tests (performance)
 - Integration tests (real-world usage)
 
-### 5. Race Detection
-Run fuzz tests with race detector for concurrency testing:
-```powershell
-go test -fuzz=FuzzCacheConcurrentOperations -fuzztime=1m -race
-```
-
-**Warning**: Race detector is slow (10-20x) but critical for finding race conditions.
-
 ## Performance Considerations
 
 ### Fuzzing is CPU-Intensive
@@ -241,70 +228,6 @@ go test -fuzz=FuzzCacheConcurrentOperations -fuzztime=1m -race
 
 Balios fuzz tests are optimized for speed while maintaining quality.
 
-## Continuous Fuzzing in CI
-
-### GitHub Actions Example (Pragmatic Approach)
-```yaml
-name: Fuzz Testing
-on:
-  pull_request:
-    branches: [ main ]
-  push:
-    branches: [ main ]
-  # Optional: weekly deep fuzz
-  schedule:
-    - cron: '0 2 * * 0'  # Sunday at 2 AM
-
-jobs:
-  # Fast fuzzing on every PR (saves GitHub Actions minutes)
-  fuzz-quick:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      - name: Quick Fuzz Test (30 sec each)
-        run: |
-          go test -fuzz=FuzzStringHash -fuzztime=30s
-          go test -fuzz=FuzzCacheSetGet -fuzztime=30s
-          go test -fuzz=FuzzCacheConcurrentOperations -fuzztime=30s
-      - name: Upload Corpus
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-corpus
-          path: testdata/fuzz/
-
-  # Extended fuzzing weekly (more thorough but uses more minutes)
-  fuzz-extended:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    strategy:
-      matrix:
-        fuzz-test:
-          - FuzzStringHash
-          - FuzzCacheSetGet
-          - FuzzCacheConcurrentOperations
-          - FuzzGetOrLoad
-          - FuzzGetOrLoadWithContext
-          - FuzzCacheConfig
-          - FuzzCacheMemorySafety
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      - name: Extended Fuzz Test (5 min)
-        run: go test -fuzz=${{ matrix.fuzz-test }} -fuzztime=5m
-      - name: Upload Corpus
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-corpus-${{ matrix.fuzz-test }}
-          path: testdata/fuzz/
-```
 ## Troubleshooting
 
 ### Fuzzing is Slow
@@ -337,19 +260,11 @@ If fuzzing reveals a **security vulnerability**:
 ## References
 
 - **Balios Fuzz Tests**: [`balios_fuzz_test.go`](../balios_fuzz_test.go) - All 7 fuzz test implementations
-- **Balios Security Tests**: [`balios_security_test.go`](../balios_security_test.go) - Additional security hardening tests
+- **Balios Security Tests**: [`balios_security_test.go`](../balios_security_test.go) - Additional, security hardening tests
 - [Go Fuzzing Documentation](https://go.dev/security/fuzz/)
 - [Fuzzing Best Practices](https://google.github.io/oss-fuzz/getting-started/best-practices/)
 - [Hash DoS Attacks](https://www.youtube.com/watch?v=R2Cq3CLI6H8)
 - [Balios Security Policy](../SECURITY.md)
-
-## Contributing
-
-When adding new features to Balios:
-1. **Add fuzz tests** for new public APIs
-2. **Update seed corpus** with edge cases
-3. **Run extended fuzz** (10 minutes minimum) before PR
-4. **Document** any new security properties tested
 
 ---
 

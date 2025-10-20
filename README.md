@@ -258,7 +258,7 @@ When Patroclus fell, it was Xanthos who spoke—granted voice by Hera herself—
 - [GetOrLoad API](docs/GETORLOAD.md) - Cache stampede prevention, singleflight pattern, best practices
 - [Metrics & Observability](docs/METRICS.md) - OpenTelemetry integration, Prometheus queries, monitoring best practices
 - [Error Handling](docs/ERRORS.md) - Structured error codes and contexts
-- [Security Report](SECURITY_REPORT.md) - Transparent security analysis, race detector findings, and production safety guarantees
+findings, and production safety guarantees
 - [Examples](examples/) - Comprehensive usage examples
 - [Benchmarks](benchmarks/) - Performance comparison with popular libraries
 - [otel/README.md](otel/README.md) and [examples/otel-prometheus/](examples/otel-prometheus/) for complete setup with Grafana dashboard.

@@ -1,6 +1,6 @@
 # Balios Architecture
 
-This document describes the internal architecture and implementation details of Balios cache.
+This document describes Balios' internal architecture and implementation details.
 
 ## Overview
 
@@ -111,7 +111,7 @@ type TimeProvider interface {
 ```
 
 **Default Implementation:** [go-timecache](https://github.com/agilira/go-timecache)
-- Uses `go-timecache.CachedTimeNano()` (121x faster than `time.Now()`)
+- Uses `go-timecache.CachedTimeNano()`
 - Updates every 1ms with dedicated goroutine
 - Shared across all caches
 

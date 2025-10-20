@@ -5,12 +5,6 @@
 
 Balios is a production-ready cache implementation based on the **W-TinyLFU** (Window Tiny Least Frequently Used) algorithm, designed to deliver exceptional performance through zero-allocation operations and lock-free data structures.
 
-**Key Metrics:**
-- **Performance:** 108.8 ns/op Get, 131.1 ns/op Set (AMD Ryzen 5 7520U)
-- **Concurrency:** Lock-free atomic operations
-- **Hit Ratio:** 40.21% (Scarab trace, 1M requests)
-- **Memory:** ~66 bytes overhead per entry
-
 ## Installation
 
 ```bash
@@ -45,7 +39,7 @@ func main() {
 
     // Check performance
     stats := cache.Stats()
-    fmt.Printf("Hit ratio: %.2f%%\n", stats.HitRatio()*100)
+    fmt.Printf("Hit ratio: %.2f%%\n", stats.HitRatio())
 }
 ```
 
@@ -136,6 +130,8 @@ Stores a key-value pair in the cache.
 - Triggers eviction if cache is full
 - Updates frequency tracking for W-TinyLFU
 
+**Note:** GenericCache.Set() does not return a value (unlike the base Cache interface which returns bool).
+
 **Example:**
 ```go
 cache.Set("user:123", User{ID: 123, Name: "Alice"})
@@ -144,6 +140,8 @@ cache.Set("user:123", User{ID: 123, Name: "Alice"})
 #### `Delete(key K)`
 
 Removes a key from the cache.
+
+**Note:** GenericCache.Delete() does not return a value (unlike the base Cache interface which returns bool).
 
 **Example:**
 ```go
@@ -182,7 +180,27 @@ Returns current cache statistics.
 ```go
 stats := cache.Stats()
 fmt.Printf("Hit Ratio: %.2f%%, Size: %d/%d\n", 
-    stats.HitRatio()*100, stats.Size, stats.Capacity)
+    stats.HitRatio(), stats.Size, stats.Capacity)
+```
+
+#### `Len() int`
+
+Returns the current number of entries in the cache.
+
+**Example:**
+```go
+currentSize := cache.Len()
+fmt.Printf("Cache contains %d entries\n", currentSize)
+```
+
+#### `Capacity() int`
+
+Returns the maximum number of entries the cache can hold.
+
+**Example:**
+```go
+maxSize := cache.Capacity()
+fmt.Printf("Cache capacity: %d entries\n", maxSize)
 ```
 
 #### `Close() error`

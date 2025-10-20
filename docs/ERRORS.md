@@ -1,6 +1,6 @@
 # Balios Error Handling
 
-Balios implements a comprehensive structured error system using the [`go-errors`](https://github.com/agilira/go-errors) library. This provides rich error context, error codes, retry semantics, and JSON serialization.
+Balios implements a comprehensive structured error system using [`go-errors`](https://github.com/agilira/go-errors). This provides rich error context, error codes, retry semantics, and JSON serialization.
 
 ## Error Categories
 
@@ -198,15 +198,6 @@ balios.IsRetryable(err)   // Can retry
 code := balios.GetErrorCode(err)       // Get error code
 ctx := balios.GetErrorContext(err)     // Get context map
 ```
-
-## Best Practices
-
-1. **Always check for retryable errors** before implementing retry logic
-2. **Extract context** for detailed logging and debugging
-3. **Use category checkers** for high-level error handling
-4. **Serialize to JSON** for structured logging in production
-5. **Check error codes** for precise error handling logic
-6. **Unwrap to root cause** to find underlying issues
 
 ## Performance
 

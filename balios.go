@@ -21,7 +21,7 @@ package balios
 
 const (
 	// Version of Balios cache library
-	Version = "v0.1.0-dev"
+	Version = "v1.0.1"
 
 	// DefaultMaxSize is the default maximum number of entries
 	DefaultMaxSize = 10_000

@@ -1,5 +1,5 @@
-github.com/agilira/argus v1.0.2 h1:EdhsPqWijPcmj2t2AzmW7hf+pU4Avxx1r/t4fmTWKDc=
-github.com/agilira/argus v1.0.2/go.mod h1:kHsrvvFT06K4UGS9LdzgKS/gq7SKMAPuRx/h3Xb+fuA=
+github.com/agilira/argus v1.0.3 h1:r6LXRjRuVK5A86CaC9Zgz0Zf7AHX8wiuKvYDo/Eb44Y=
+github.com/agilira/argus v1.0.3/go.mod h1:bK3craJLnv+tG3lSa60jViYFXH83lSHhpq8x6SNkm6E=
 github.com/agilira/flash-flags v1.1.5 h1:wCYtbmNfqDyDO5J3qE32rRnVLh+8hm0pKNTTmCemR50=
 github.com/agilira/flash-flags v1.1.5/go.mod h1:vuuo9FRN+ZgREaa1WYRmUFac/h3+CwuvD4EvjF5JNIQ=
 github.com/agilira/go-errors v1.1.0 h1:97cBNEDo6q2pKzkr/YqlqWq3fa5rOU8E4LOnSsCmWck=

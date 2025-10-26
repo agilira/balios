@@ -889,7 +889,7 @@ func TestSecurity_RaceConditionAttacks(t *testing.T) {
 	t.Run("ConcurrentSetSameKey", func(t *testing.T) {
 		// Create isolated cache for this test
 		cache := ctx.CreateMaliciousCache(Config{
-			MaxSize: 100,
+			MaxSize: 1000, // Larger to prevent eviction during concurrent updates
 		})
 		numGoroutines := 100
 		var wg sync.WaitGroup

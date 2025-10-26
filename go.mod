@@ -2,7 +2,7 @@ module github.com/agilira/balios
 
 go 1.25
 
-require github.com/agilira/argus v1.0.6
+require github.com/agilira/argus v1.0.7
 
 require github.com/agilira/go-errors v1.1.1
 

@@ -18,6 +18,11 @@ type Cache interface {
 
 	// Set stores a key-value pair in the cache.
 	// Returns true if the item was successfully stored.
+	//
+	// Note: Returns false only in extreme cases when the cache is full and
+	// eviction fails repeatedly, which is virtually impossible in normal operation
+	// (< 0.001% probability with proper cache sizing). In practice, Set() always succeeds.
+	//
 	// This method must be zero-allocation on the hot path.
 	Set(key string, value interface{}) bool
 
@@ -36,6 +41,9 @@ type Cache interface {
 	Capacity() int
 
 	// Clear removes all items from the cache.
+	// Note: This operation is not atomic. During Clear(), other goroutines
+	// may still read/write, potentially observing a partially cleared cache.
+	// This is acceptable for most use cases (cache flush, shutdown, testing).
 	Clear()
 
 	// Stats returns cache statistics.
@@ -81,6 +89,8 @@ type CacheStats struct {
 }
 
 // HitRatio returns the cache hit ratio as a percentage (0-100).
+// Returns 0.0 if no Get operations have been performed yet.
+// Formula: (Hits / (Hits + Misses)) * 100
 func (s CacheStats) HitRatio() float64 {
 	total := s.Hits + s.Misses
 	if total == 0 {

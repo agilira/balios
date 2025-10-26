@@ -54,6 +54,7 @@ func NewGenericCache[K comparable, V any](cfg Config) *GenericCache[K, V] {
 func (c *GenericCache[K, V]) Set(key K, value V) {
 	// Fast path: convert key to string with zero allocations for common types
 	keyStr := keyToString(key)
+	// Validation is done by inner cache (empty string check)
 	c.inner.Set(keyStr, value)
 }
 
@@ -144,6 +145,17 @@ func keyToString[K comparable](key K) string {
 // Clear removes all entries from the cache and resets statistics.
 func (c *GenericCache[K, V]) Clear() {
 	c.inner.Clear()
+}
+
+// Len returns the current number of items in the cache.
+// This is equivalent to Stats().Size but more efficient.
+func (c *GenericCache[K, V]) Len() int {
+	return c.inner.Len()
+}
+
+// Capacity returns the maximum number of items the cache can hold.
+func (c *GenericCache[K, V]) Capacity() int {
+	return c.inner.Capacity()
 }
 
 // Stats returns current cache statistics.

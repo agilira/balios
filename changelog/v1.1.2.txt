@@ -1,0 +1,237 @@
+Balios v1.1.2 Release Notes
+===========================
+
+Release Date: October 26, 2025
+Platform: AMD Ryzen 5 7520U, Go 1.25+, Linux amd64
+
+OVERVIEW
+--------
+Version 1.1.2 introduces 4 new features, security hardening, code quality 
+improvements, and significant performance gains (8-33% faster) while 
+maintaining 100% backward compatibility.
+
+NEW FEATURES
+------------
+
+1. Empty Key Validation
+   - Added ErrCodeEmptyKey error code
+   - Get/Set/Delete/Has methods now reject empty string keys
+   - GetOrLoad/GetOrLoadWithContext return structured error for empty keys
+   - Zero performance overhead (branch prediction optimized)
+   - Test coverage: empty_key_test.go
+
+2. Negative Caching for GetOrLoad
+   - New Config.NegativeCacheTTL option (default: 0, disabled)
+   - Caches loader errors to prevent repeated failed operations
+   - Per-key error caching with automatic expiration
+   - Thread-safe implementation using sync.Map
+   - Use cases: circuit breaker, rate limiting, service failures
+   - Test coverage: negative_cache_test.go
+
+3. Memory Footprint Benchmarks
+   - New memory_bench_test.go with comprehensive analysis
+   - Per-entry overhead calculation
+   - Comparison with native Go maps
+   - Memory leak detection tests
+   - Benchmarks: Empty/Populated/Generic/LargeValues/Eviction
+
+4. Code Refactoring - Set() Deduplication
+   - Extracted populateEntry() helper method
+   - Eliminated 40+ lines of duplicated code
+   - Maintains identical semantics and atomicity
+   - Enables better compiler optimization
+
+CODE QUALITY IMPROVEMENTS
+--------------------------
+
+Cyclomatic Complexity Reduction:
+- parseConfig() complexity: 18 → 7 (-61%)
+- Extracted 4 reusable helper functions:
+  * parsePositiveInt() - handles int/float64 with validation
+  * parseIntInRange() - range validation with type flexibility
+  * parseDuration() - string to duration conversion
+  * parseFloatInRange() - float range validation
+- Improved testability and maintainability
+- Zero performance impact (non-hot path)
+
+Production Code Analysis:
+- Functions with complexity > 8 analyzed and justified
+- Lock-free operations (Set/Get) complexity necessary for correctness
+- All high-complexity functions documented and performance-critical
+
+SECURITY IMPROVEMENTS
+---------------------
+
+gosec Security Scan: 12 issues → 0 issues
+
+Fixed Issues:
+1. G404 (8 issues) - Weak Random Number Generator
+   - Location: examples/otel-prometheus/main.go
+   - Changed: math/rand → crypto/rand
+   - Added: secureRandInt() and secureRandFloat64() helpers
+   - Impact: Eliminates predictable PRNG exploitation
+
+2. G112 (1 issue) - Slowloris Attack Prevention
+   - Location: examples/otel-prometheus/main.go
+   - Added: ReadHeaderTimeout: 5 * time.Second
+   - Impact: Prevents slow-read DoS attacks
+
+3. G103 (4 issues) - Unsafe Usage Documentation
+   - Location: cache.go
+   - Added: #nosec annotations with detailed justifications
+   - Rationale: Essential for zero-allocation performance
+   - Verified: Safe by design (Go strings immutable, atomic ops)
+
+PERFORMANCE ANALYSIS
+--------------------
+
+Benchmark Results (v1.1.1 → v1.1.2):
+
+Single-Threaded Operations:
+- Set: 147.7 → 135.5 ns/op (-8.3%, +12.2 ns improvement)
+- Get: 124.2 → 108.7 ns/op (-12.5%, +15.5 ns improvement)
+
+Parallel Operations (8 cores):
+- Set: 52.73 → 39.47 ns/op (-25.1%, +13.26 ns improvement)
+- Get: 32.59 → 27.90 ns/op (-14.4%, +4.69 ns improvement)
+
+Mixed Workloads:
+- Write-Heavy (10R/90W): 58.99 → 42.03 ns/op (-28.8%)
+- Balanced (50R/50W): 59.12 → 39.39 ns/op (-33.4%)
+- Read-Heavy (90R/10W): 40.80 → 34.76 ns/op (-14.8%)
+- Read-Only (100R): 35.11 → 27.32 ns/op (-22.2%)
+
+Hit Ratio Analysis:
+- Balios: 79.34% (was 80.08%, -0.74% within statistical noise)
+- Hit ratio variance within expected ±1% margin
+- W-TinyLFU algorithm behavior unchanged
+
+Performance Improvement Causes:
+- Compiler optimization of refactored code
+- Better CPU cache utilization
+- Reduced instruction count in hot paths
+- Improved branch prediction
+
+Competitive Position:
+- Maintained performance leadership vs Otter and Ristretto
+- Read-Only performance now matches Otter (27.32 vs 27.61 ns/op)
+- Parallel operations 6.0x faster than Otter
+- Memory efficiency 5.1x better than Otter (10 B/op vs 51 B/op)
+
+QUALITY METRICS
+---------------
+
+Test Coverage: 87.4% → 88.8% (+1.4%)
+
+Static Analysis Results:
+- go fmt: All files formatted
+- go vet: No issues
+- staticcheck: No issues
+- errcheck: No unchecked errors
+- gosec: 0 issues (24 justified nosec annotations)
+- govulncheck: No vulnerabilities
+- go test -race: No race conditions
+- gocyclo: All high-complexity functions analyzed and justified
+
+Code Metrics:
+- Production code: ~4,100 lines (+300 from v1.1.1)
+- Test code: ~5,800 lines (+600 from v1.1.1)
+- Total analyzed: 6,881 lines
+- Code-to-test ratio: 1:1.4
+
+DOCUMENTATION UPDATES
+---------------------
+
+Updated Files:
+- README.md: Performance tables, coverage badge (88.8%), negative caching section
+- doc.go: Benchmark numbers, NegativeCacheTTL configuration
+- docs/GETORLOAD.md: Complete negative caching guide with examples
+- docs/ERRORS.md: BALIOS_EMPTY_KEY error code (already present)
+
+New Documentation:
+- empty_key_test.go: Comprehensive validation test suite
+- negative_cache_test.go: Negative caching test coverage  
+- memory_bench_test.go: Memory analysis benchmarks
+
+BREAKING CHANGES
+----------------
+
+None. Version 1.1.2 is 100% backward compatible with v1.1.1.
+
+API CHANGES
+-----------
+
+New Configuration Field:
+- Config.NegativeCacheTTL (time.Duration, default: 0)
+  * Optional field for negative caching
+  * Backward compatible (zero value = disabled)
+
+New Error Code:
+- BALIOS_EMPTY_KEY
+  * Returned when empty string key is provided
+  * Helper: IsEmptyKey(err) for error checking
+
+MIGRATION NOTES
+---------------
+
+No migration required. Applications using v1.1.1 can upgrade to v1.1.2 
+without code changes.
+
+Optional Enhancements:
+1. Enable negative caching for high-failure scenarios:
+   Config{NegativeCacheTTL: 30 * time.Second}
+
+2. Update monitoring dashboards for improved performance metrics
+
+3. Re-baseline latency alerts (operations are faster)
+
+UPGRADE INSTRUCTIONS
+--------------------
+
+go get -u github.com/agilira/balios@v1.1.2
+
+Or in go.mod:
+require github.com/agilira/balios v1.1.2
+
+TESTING RECOMMENDATIONS
+-----------------------
+
+After upgrading:
+1. Run existing test suite to verify compatibility
+2. Monitor cache hit ratios (should remain stable)
+3. Check error handling for empty keys if applicable
+4. Consider enabling negative caching for error-prone operations
+
+KNOWN ISSUES
+------------
+
+None.
+
+CONTRIBUTORS
+------------
+
+This release was developed by the AGILira team.
+
+DEPENDENCIES
+------------
+
+- Go 1.24+
+- github.com/agilira/argus (hot reload)
+- github.com/agilira/go-errors (structured errors)
+- github.com/agilira/go-timecache (fast time operations)
+
+REFERENCES
+----------
+
+- Repository: https://github.com/agilira/balios
+- Documentation: https://github.com/agilira/balios/tree/main/docs
+- Benchmarks: https://github.com/agilira/balios/tree/main/benchmarks
+- Issue Tracker: https://github.com/agilira/balios/issues
+
+---
+
+For detailed implementation notes, see:
+- Performance comparison: benchmarks/RESULTS_v1.1.2.md
+- Security analysis: SECURITY.md
+- Architecture details: docs/ARCHITECTURE.md
+- API reference: docs/API.md

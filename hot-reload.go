@@ -147,6 +147,58 @@ func (hc *HotConfig) handleConfigChange(configData map[string]interface{}) {
 	}
 }
 
+// parsePositiveInt extracts a positive integer from interface{} value.
+// Supports both int and float64 types (YAML/JSON may vary).
+func parsePositiveInt(value interface{}) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		if v > 0 {
+			return v, true
+		}
+	case float64:
+		if v > 0 {
+			return int(v), true
+		}
+	}
+	return 0, false
+}
+
+// parseIntInRange extracts an integer within the specified range [min, max].
+// Supports both int and float64 types.
+func parseIntInRange(value interface{}, min, max int) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		if v >= min && v <= max {
+			return v, true
+		}
+	case float64:
+		if v >= float64(min) && v <= float64(max) {
+			return int(v), true
+		}
+	}
+	return 0, false
+}
+
+// parseDuration extracts a time.Duration from a string value.
+func parseDuration(value interface{}) (time.Duration, bool) {
+	if str, ok := value.(string); ok {
+		if d, err := time.ParseDuration(str); err == nil {
+			return d, true
+		}
+	}
+	return 0, false
+}
+
+// parseFloatInRange extracts a float64 within the specified range (min, max).
+func parseFloatInRange(value interface{}, min, max float64) (float64, bool) {
+	if v, ok := value.(float64); ok {
+		if v > min && v < max {
+			return v, true
+		}
+	}
+	return 0, false
+}
+
 // parseConfig extracts cache configuration from Argus config data.
 func (hc *HotConfig) parseConfig(data map[string]interface{}) Config {
 	config := DefaultConfig()
@@ -163,40 +215,29 @@ func (hc *HotConfig) parseConfig(data map[string]interface{}) Config {
 	}
 
 	// Parse MaxSize
-	if maxSize, ok := cacheSection["max_size"].(int); ok && maxSize > 0 {
+	if maxSize, ok := parsePositiveInt(cacheSection["max_size"]); ok {
 		config.MaxSize = maxSize
-	} else if maxSize, ok := cacheSection["max_size"].(float64); ok && maxSize > 0 {
-		config.MaxSize = int(maxSize)
 	}
 
 	// Parse TTL (string duration like "1h", "30m")
-	// Note: YAML values should be unquoted (e.g., ttl: 10m not ttl: "10m")
-	if ttlStr, ok := cacheSection["ttl"].(string); ok {
-		if ttl, err := time.ParseDuration(ttlStr); err == nil {
-			config.TTL = ttl
-		}
+	if ttl, ok := parseDuration(cacheSection["ttl"]); ok {
+		config.TTL = ttl
 	}
 
-	// Parse WindowRatio
-	if ratio, ok := cacheSection["window_ratio"].(float64); ok {
-		if ratio > 0 && ratio < 1 {
-			config.WindowRatio = ratio
-		}
+	// Parse WindowRatio (must be between 0 and 1, exclusive)
+	if ratio, ok := parseFloatInRange(cacheSection["window_ratio"], 0, 1); ok {
+		config.WindowRatio = ratio
 	}
 
-	// Parse CounterBits
-	if bits, ok := cacheSection["counter_bits"].(int); ok {
-		if bits >= 1 && bits <= 8 {
-			config.CounterBits = bits
-		}
-	} else if bits, ok := cacheSection["counter_bits"].(float64); ok {
-		if bits >= 1 && bits <= 8 {
-			config.CounterBits = int(bits)
-		}
+	// Parse CounterBits (must be between 1 and 8, inclusive)
+	if bits, ok := parseIntInRange(cacheSection["counter_bits"], 1, 8); ok {
+		config.CounterBits = bits
 	}
 
 	return config
-} // applyChanges applies configuration changes to the running cache.
+}
+
+// applyChanges applies configuration changes to the running cache.
 // Note: Some changes (like MaxSize) cannot be applied dynamically and require
 // cache reconstruction.
 func (hc *HotConfig) applyChanges(old, new Config) {

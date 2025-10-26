@@ -16,6 +16,7 @@ Balios errors are organized into logical categories with unique error codes:
 ### Operation Errors (2xxx)
 - `BALIOS_CACHE_FULL` - Cache is full and eviction failed (retryable)
 - `BALIOS_KEY_NOT_FOUND` - Key does not exist in cache
+- `BALIOS_EMPTY_KEY` - Empty key provided (keys cannot be empty strings)
 - `BALIOS_EVICTION_FAILED` - Failed to evict an entry (retryable)
 - `BALIOS_SET_FAILED` - Failed to set a value (retryable)
 - `BALIOS_DELETE_FAILED` - Failed to delete a value (retryable)

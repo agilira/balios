@@ -28,6 +28,7 @@ const (
 	// Operation errors (2xxx)
 	ErrCodeCacheFull      errors.ErrorCode = "BALIOS_CACHE_FULL"
 	ErrCodeKeyNotFound    errors.ErrorCode = "BALIOS_KEY_NOT_FOUND"
+	ErrCodeEmptyKey       errors.ErrorCode = "BALIOS_EMPTY_KEY"
 	ErrCodeEvictionFailed errors.ErrorCode = "BALIOS_EVICTION_FAILED"
 	ErrCodeSetFailed      errors.ErrorCode = "BALIOS_SET_FAILED"
 	ErrCodeDeleteFailed   errors.ErrorCode = "BALIOS_DELETE_FAILED"
@@ -56,6 +57,7 @@ const (
 	msgInvalidTTL         = "invalid TTL: must be non-negative"
 	msgCacheFull          = "cache is full and eviction failed"
 	msgKeyNotFound        = "key not found in cache"
+	msgEmptyKey           = "key cannot be empty"
 	msgEvictionFailed     = "failed to evict entry from cache"
 	msgSetFailed          = "failed to set key-value pair"
 	msgDeleteFailed       = "failed to delete key"
@@ -120,6 +122,11 @@ func NewErrCacheFull(capacity int, size int) error {
 // NewErrKeyNotFound creates an error when key is not found
 func NewErrKeyNotFound(key string) error {
 	return errors.NewWithField(ErrCodeKeyNotFound, msgKeyNotFound, "key", key)
+}
+
+// NewErrEmptyKey creates an error when key is empty
+func NewErrEmptyKey(operation string) error {
+	return errors.NewWithField(ErrCodeEmptyKey, msgEmptyKey, "operation", operation)
 }
 
 // NewErrEvictionFailed creates an error when eviction fails
@@ -229,6 +236,11 @@ func NewErrPanicRecovered(operation string, panicValue interface{}) error {
 // IsNotFound checks if error is a key not found error
 func IsNotFound(err error) bool {
 	return errors.HasCode(err, ErrCodeKeyNotFound)
+}
+
+// IsEmptyKey checks if error is an empty key error
+func IsEmptyKey(err error) bool {
+	return errors.HasCode(err, ErrCodeEmptyKey)
 }
 
 // IsCacheFull checks if error is a cache full error

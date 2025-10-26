@@ -4,7 +4,7 @@
 // # Overview
 //
 // Balios is designed for production use with focus on:
-//   - Performance: 124.2 ns/op Get, 147.7 ns/op Set (AMD Ryzen 5 7520U)
+//   - Performance: 108.7 ns/op Get, 135.5 ns/op Set (AMD Ryzen 5 7520U)
 //   - Concurrency: Lock-free operations using atomic primitives
 //   - Type Safety: Generic API with compile-time type checking
 //   - Observability: OpenTelemetry integration (optional separate package)
@@ -76,9 +76,9 @@
 //	    })
 //
 // Key characteristics of GetOrLoad:
-//   - Cache hit: Same performance as Get() (33.60 ns/op parallel)
+//   - Cache hit: Same performance as Get() (27.90 ns/op parallel)
 //   - Concurrent requests: N requests = 1 loader call (singleflight)
-//   - Error handling: Loader errors are NOT cached
+//   - Error handling: Errors can be cached with NegativeCacheTTL option (v1.1.2+)
 //   - Panic recovery: Returns BALIOS_PANIC_RECOVERED error if loader panics
 //
 // # W-TinyLFU Algorithm
@@ -104,8 +104,8 @@
 //   - Thread-Safe: All operations safe for concurrent use
 //
 // Benchmark with 8 goroutines:
-//   - Get: 33.60 ns/op (8 parallel)
-//   - Set: 60.24 ns/op (8 parallel)
+//   - Get: 27.90 ns/op (8 parallel)
+//   - Set: 39.47 ns/op (8 parallel)
 //   - No deadlocks or race conditions
 //
 // # TTL (Time To Live)
@@ -172,6 +172,10 @@
 //	    // Optional: Time-to-live for entries (default: no expiration)
 //	    TTL: time.Hour,
 //
+//	    // Optional: Negative cache TTL for loader errors (default: 0, disabled)
+//	    // When enabled, failed loads are cached to prevent repeated expensive failures
+//	    NegativeCacheTTL: 5 * time.Second,
+//
 //	    // Optional: Logger for errors and events (default: nil)
 //	    Logger: myLogger,
 //
@@ -236,21 +240,21 @@
 //	}
 //
 // Available error codes:
-//   - BALIOS_LOADER_ERROR: Loader function returned error
+//   - BALIOS_EMPTY_KEY: Empty key provided (keys cannot be empty)
+//   - BALIOS_INVALID_LOADER: Loader function is nil
 //   - BALIOS_PANIC_RECOVERED: Loader function panicked (panic value included)
-//   - BALIOS_CONTEXT_CANCELED: Context was canceled
-//   - BALIOS_CONTEXT_TIMEOUT: Context deadline exceeded
+//   - BALIOS_LOADER_FAILED: Loader function returned error
 //   - BALIOS_INVALID_CONFIG: Invalid configuration
 //
 // All errors implement error interface and can be unwrapped.
 //
 // # Performance
 //
-// Benchmark results (AMD Ryzen 5 7520U, Go 1.25.1):
+// Benchmark results (AMD Ryzen 5 7520U, Go 1.25+):
 //
-//	BenchmarkCache_Set-8                    6758980    147.7 ns/op     1 B/op    1 allocs/op
-//	BenchmarkCache_Get-8                    8045678    124.2 ns/op     0 B/op    0 allocs/op
-//	BenchmarkCache_Get_Parallel-8           29738515   33.60 ns/op     0 B/op    0 allocs/op
+//	BenchmarkCache_Set-8                    24680026   135.5 ns/op    10 B/op    1 allocs/op
+//	BenchmarkCache_Get-8                    30607568   108.7 ns/op     0 B/op    0 allocs/op
+//	BenchmarkCache_Get_Parallel-8          143774287    27.90 ns/op    0 B/op    0 allocs/op
 //	BenchmarkGenericCache_GetOrLoad_Hit-8   Same as Get performance (cache hit)
 //
 // Key characteristics:
@@ -259,10 +263,11 @@
 //   - Excellent parallel scalability
 //   - Sub-microsecond latencies
 //
-// Hit ratio comparison (Scarab trace, 1M requests):
-//   - balios (W-TinyLFU): 40.21%
-//   - Otter: 40.20%
-//   - Ristretto: 39.53%
+// Hit ratio comparison (100K requests, Zipf distribution):
+//   - Balios: 79.34%
+//   - Balios-Generic: 79.67%
+//   - Otter: 79.68%
+//   - Ristretto: 68.59%
 //
 // # Memory Layout
 //
@@ -332,8 +337,9 @@
 //   - Consider data freshness requirements
 //
 // 5. Handle loader errors:
-//   - Errors are NOT cached (prevents error amplification)
+//   - Errors can be cached with NegativeCacheTTL to prevent repeated failures
 //   - Implement retry logic in loader if needed
+//   - Use context timeouts to prevent hanging
 //
 // 6. Use context with timeout:
 //   - Prevents hanging on slow loaders

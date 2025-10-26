@@ -8,7 +8,7 @@ Balios is a high-performance in-memory caching library for Go, based on W-TinyLF
 [![CodeQL](https://github.com/agilira/balios/actions/workflows/codeql.yml/badge.svg)](https://github.com/agilira/balios/actions/workflows/codeql.yml)
 [![Security](https://img.shields.io/badge/security-gosec-brightgreen.svg)](https://github.com/agilira/balios/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/agilira/balios)](https://goreportcard.com/report/github.com/agilira/balios)
-[![Test Coverage](https://img.shields.io/badge/coverage-87.4%25-brightgreen)](https://github.com/agilira/balios)
+[![Test Coverage](https://img.shields.io/badge/coverage-88.8%25-brightgreen)](https://github.com/agilira/balios)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11297/badge)](https://www.bestpractices.dev/projects/11297)
 
 **[Features](#features) • [Quick Start](#quick-start) • [Performance](#performance) • [Observability Architecture](#observability-architecture) • [Philosophy](#the-philosophy-behind-balios) • [Documentation](#documentation)**
@@ -21,6 +21,7 @@ Balios is a high-performance in-memory caching library for Go, based on W-TinyLF
 - **Lock-Free**: Uses atomic primitives for high concurrency
 - **TTL Support**: Automatic expiration with lazy cleanup
 - **Context Support**: Timeout and cancellation for loader functions
+- **Negative Caching**: Cache loader errors to prevent repeated failed operations (v1.1.2+)
 - **Hot Reload**: Dynamic configuration updates via [Argus](https://github.com/agilira/argus)
 - **Structured Errors**: Rich error context with [go-errors](https://github.com/agilira/go-errors) - see [examples/errors/](examples/errors/)
 - **Observability**: OpenTelemetry integration for metrics (p50/p95/p99 latencies, hit ratio) & logger interface. Zero overhead when disabled (compiler eliminates no-op implementations) - see [examples/otel-prometheus/](examples/otel-prometheus/)
@@ -81,42 +82,70 @@ func main() {
 }
 ```
 
+### Advanced Configuration
+
+**Negative Caching** (v1.1.2+): Cache loader errors to prevent repeated failed operations
+
+```go
+cache := balios.NewGenericCache[int, User](balios.Config{
+    MaxSize:          10_000,
+    TTL:              5 * time.Minute,
+    NegativeCacheTTL: 30 * time.Second, // Cache errors for 30s
+})
+
+// First call: loader fails
+_, err := cache.GetOrLoad(123, func() (User, error) {
+    return User{}, fmt.Errorf("database unavailable")
+})
+// Error returned
+
+// Subsequent calls within 30s: cached error returned WITHOUT calling loader
+_, err = cache.GetOrLoad(123, func() (User, error) {
+    panic("This won't be called - error is cached!")
+})
+// Same error returned (no loader execution)
+```
+
+**Use cases**: Circuit breaker pattern, API rate limiting, external service failures.  
+**See**: [GetOrLoad documentation](docs/GETORLOAD.md#negative-caching-v112) for complete guide.
+
 ## Performance
 
 **Single-Threaded Performance:**
 
 | Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
 | :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **147.7 ns/op** | **+0%** | **124.2 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 154.8 ns/op | +5% | 121.1 ns/op | -3% | 1/0 allocs/op |
-| Otter | 375.3 ns/op | +154% | 124.4 ns/op | +0% | 1/0 allocs/op |
-| Ristretto | 305.9 ns/op | +107% | 162.7 ns/op | +31% | 2/0 allocs/op |
+| **Balios** | **135.5 ns/op** | **+0%** | **108.7 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 140.8 ns/op | +4% | 112.8 ns/op | +4% | 1/0 allocs/op |
+| Otter | 339.9 ns/op | +151% | 123.9 ns/op | +14% | 1/0 allocs/op |
+| Ristretto | 277.9 ns/op | +105% | 143.1 ns/op | +32% | 2/0 allocs/op |
 
 **Parallel Performance (8 cores):**
 
 | Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
 | :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **52.73 ns/op** | **+0%** | **32.59 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 56.92 ns/op | +8% | 34.51 ns/op | +6% | 1/0 allocs/op |
-| Otter | 250.3 ns/op | +375% | 25.95 ns/op | -20% | 1/0 allocs/op |
-| Ristretto | 124.3 ns/op | +136% | 34.27 ns/op | +5% | 1/0 allocs/op |
+| **Balios** | **39.47 ns/op** | **+0%** | **27.90 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 41.40 ns/op | +5% | 29.00 ns/op | +4% | 1/0 allocs/op |
+| Otter | 238.5 ns/op | +504% | 29.66 ns/op | +6% | 1/0 allocs/op |
+| Ristretto | 130.0 ns/op | +229% | 57.28 ns/op | +105% | 1/0 allocs/op |
 
 **Mixed Workloads (Realistic Scenarios):**
 
 | Workload | Balios | Balios-Generic | Otter | Ristretto | Best |
 | :------- | -----: | -------------: | ----: | --------: | :--- |
-| Write-Heavy (10% R / 90% W) | **58.99 ns/op** | 84.22 ns/op | 414.7 ns/op | 159.8 ns/op | **Balios** |
-| Balanced (50% R / 50% W) | **59.12 ns/op** | 58.71 ns/op | 155.2 ns/op | 131.9 ns/op | **Balios** |
-| Read-Heavy (90% R / 10% W) | **40.80 ns/op** | 39.85 ns/op | 72.82 ns/op | 77.92 ns/op | **Balios** |
-| Read-Only (100% R) | 35.11 ns/op | 36.09 ns/op | **27.81 ns/op** | 36.42 ns/op | **Otter** |
+| Write-Heavy (10% R / 90% W) | **42.03 ns/op** | 43.29 ns/op | 217.2 ns/op | 169.0 ns/op | **Balios** |
+| Balanced (50% R / 50% W) | **39.39 ns/op** | 42.53 ns/op | 137.6 ns/op | 169.0 ns/op | **Balios** |
+| Read-Heavy (90% R / 10% W) | **34.76 ns/op** | 35.95 ns/op | 49.47 ns/op | 137.3 ns/op | **Balios** |
+| Read-Only (100% R) | **27.32 ns/op** | 31.20 ns/op | 27.61 ns/op | 34.05 ns/op | **Balios** |
 
 **Hit Ratio (100K requests, Zipf distribution):**
 
 | Cache | Hit Ratio | Notes |
 | :---- | --------: | :---- |
-| **Balios** | **80.08%** | Statistically equivalent to Otter |
-| Otter | 79.68% | -0.5% (within noise margin) |
-| Ristretto | 65.22% | -18.5% |
+| **Balios** | **79.34%** | Statistically equivalent to Otter |
+| Balios-Generic | **79.67%** | Matches Otter perfectly |
+| Otter | 79.68% | Best (by 0.01% margin) |
+| Ristretto | 68.59% | -11% lower |
 
 **Test Environment:** AMD Ryzen 5 7520U Go 1.25+
 
@@ -152,9 +181,9 @@ user, err := cache.GetOrLoadWithContext(ctx, "user:123",
 ```
 
 **Key characteristics:**
-- Cache hit: Same performance as `Get()` operations (32.59 ns/op parallel, 0 allocations)
+- Cache hit: Same performance as `Get()` operations (27.90 ns/op parallel, 0 allocations)
 - Concurrent requests: 1000 simultaneous requests = 1 loader call (singleflight)
-- Error handling: Loader errors are NOT cached (prevents error amplification)
+- Error handling: Loader errors can be cached with `NegativeCacheTTL` option
 - Panic recovery: Returns `BALIOS_PANIC_RECOVERED` error if loader panics
 
 See [examples/getorload/](examples/getorload/) for comprehensive examples.

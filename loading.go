@@ -34,10 +34,6 @@ type errorWrapper struct {
 	err error
 }
 
-// inflight tracks in-flight loader calls for singleflight pattern
-// Uses sync.Map for race-free concurrent access without global lock
-var inflight sync.Map
-
 // GetOrLoad returns the value from cache, or loads it using the provided loader function.
 // If multiple goroutines call GetOrLoad for the same missing key concurrently,
 // only one loader will be executed (singleflight pattern to prevent cache stampede).
@@ -66,9 +62,29 @@ var inflight sync.Map
 //	    return fetchUserFromDB(123)
 //	})
 func (c *wtinyLFUCache) GetOrLoad(key string, loader func() (interface{}, error)) (interface{}, error) {
+	// Validate key is not empty
+	if key == "" {
+		return nil, NewErrEmptyKey("GetOrLoad")
+	}
+
 	// Fast path: check cache first
 	if value, found := c.Get(key); found {
 		return value, nil
+	}
+
+	// Check negative cache if enabled
+	if c.negativeTTLNanos > 0 {
+		negKey := "neg:" + key
+		if negEntry, found := c.negativeCache.Load(negKey); found {
+			neg := negEntry.(negativeEntry)
+			// Check if negative entry has expired
+			if c.timeProvider.Now() <= neg.expireAt {
+				// Return cached error
+				return nil, neg.err
+			}
+			// Expired, remove it
+			c.negativeCache.Delete(negKey)
+		}
 	}
 
 	// Validate loader
@@ -77,13 +93,14 @@ func (c *wtinyLFUCache) GetOrLoad(key string, loader func() (interface{}, error)
 	}
 
 	// Singleflight: check if another goroutine is already loading this key
+	// Use per-cache inflight map instead of global to prevent memory leaks
 	callKey := "load:" + key
 
 	// Create and initialize flight BEFORE putting it in map
 	newFlight := &inflightCall{}
 	newFlight.wg.Add(1) // Initialize WaitGroup before any other goroutine can see it
 
-	actual, loaded := inflight.LoadOrStore(callKey, newFlight)
+	actual, loaded := c.inflight.LoadOrStore(callKey, newFlight)
 	flight := actual.(*inflightCall)
 
 	if loaded {
@@ -101,7 +118,7 @@ func (c *wtinyLFUCache) GetOrLoad(key string, loader func() (interface{}, error)
 	// We are the first (we inserted newFlight), execute the loader
 	defer func() {
 		flight.wg.Done()
-		inflight.Delete(callKey)
+		c.inflight.Delete(callKey) // Cleanup from per-cache map
 	}()
 
 	// Execute loader with panic recovery
@@ -123,6 +140,14 @@ func (c *wtinyLFUCache) GetOrLoad(key string, loader func() (interface{}, error)
 	// If successful, cache the value
 	if loaderErr == nil && loaderVal != nil {
 		c.Set(key, loaderVal)
+	} else if loaderErr != nil && c.negativeTTLNanos > 0 {
+		// Cache the error (negative caching)
+		negKey := "neg:" + key
+		expireAt := c.timeProvider.Now() + c.negativeTTLNanos
+		c.negativeCache.Store(negKey, negativeEntry{
+			err:      loaderErr,
+			expireAt: expireAt,
+		})
 	}
 
 	return loaderVal, loaderErr
@@ -148,9 +173,29 @@ func (c *wtinyLFUCache) GetOrLoad(key string, loader func() (interface{}, error)
 //	    return fetchUserFromDBWithContext(ctx, 123)
 //	})
 func (c *wtinyLFUCache) GetOrLoadWithContext(ctx context.Context, key string, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	// Validate key is not empty
+	if key == "" {
+		return nil, NewErrEmptyKey("GetOrLoadWithContext")
+	}
+
 	// Fast path: check cache first (no context needed for cache hit)
 	if value, found := c.Get(key); found {
 		return value, nil
+	}
+
+	// Check negative cache if enabled
+	if c.negativeTTLNanos > 0 {
+		negKey := "neg:" + key
+		if negEntry, found := c.negativeCache.Load(negKey); found {
+			neg := negEntry.(negativeEntry)
+			// Check if negative entry has expired
+			if c.timeProvider.Now() <= neg.expireAt {
+				// Return cached error
+				return nil, neg.err
+			}
+			// Expired, remove it
+			c.negativeCache.Delete(negKey)
+		}
 	}
 
 	// Validate loader
@@ -164,13 +209,14 @@ func (c *wtinyLFUCache) GetOrLoadWithContext(ctx context.Context, key string, lo
 	}
 
 	// Singleflight with context awareness
+	// Use per-cache inflight map instead of global to prevent memory leaks
 	callKey := "load:" + key
 
 	// Create and initialize flight BEFORE putting it in map
 	newFlight := &inflightCall{}
 	newFlight.wg.Add(1) // Initialize WaitGroup before any other goroutine can see it
 
-	actual, loaded := inflight.LoadOrStore(callKey, newFlight)
+	actual, loaded := c.inflight.LoadOrStore(callKey, newFlight)
 	flight := actual.(*inflightCall)
 
 	if loaded {
@@ -198,7 +244,7 @@ func (c *wtinyLFUCache) GetOrLoadWithContext(ctx context.Context, key string, lo
 	// We are the first (we inserted newFlight), execute the loader
 	defer func() {
 		flight.wg.Done()
-		inflight.Delete(callKey)
+		c.inflight.Delete(callKey) // Cleanup from per-cache map
 	}()
 
 	// Execute loader with panic recovery and context
@@ -220,6 +266,14 @@ func (c *wtinyLFUCache) GetOrLoadWithContext(ctx context.Context, key string, lo
 	// If successful, cache the value
 	if loaderErr == nil && loaderVal != nil {
 		c.Set(key, loaderVal)
+	} else if loaderErr != nil && c.negativeTTLNanos > 0 {
+		// Cache the error (negative caching)
+		negKey := "neg:" + key
+		expireAt := c.timeProvider.Now() + c.negativeTTLNanos
+		c.negativeCache.Store(negKey, negativeEntry{
+			err:      loaderErr,
+			expireAt: expireAt,
+		})
 	}
 
 	return loaderVal, loaderErr

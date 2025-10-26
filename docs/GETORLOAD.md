@@ -361,7 +361,9 @@ if err != nil {
 
 ### Error Caching Behavior
 
-**Important**: Loader errors are NOT cached!
+#### Default Behavior: Errors Not Cached
+
+**Important**: By default, loader errors are NOT cached!
 
 ```go
 // First call: loader returns error
@@ -377,6 +379,124 @@ _, err = cache.GetOrLoad(key, func() (V, error) {
 ```
 
 **Rationale**: Prevents error amplification. Temporary errors (network glitches, DB timeouts) shouldn't be cached.
+
+#### Negative Caching (v1.1.2+)
+
+**New Feature**: Cache loader errors to prevent repeated failed operations.
+
+**Use Cases:**
+- External service is down (avoid hammering dead service)
+- Rate limiting errors (respect rate limits)
+- Database connection failures (circuit breaker pattern)
+- Validation failures that won't change quickly
+
+**Configuration:**
+
+```go
+cache := balios.NewGenericCache[int, User](balios.Config{
+    MaxSize:          1000,
+    TTL:              5 * time.Minute,
+    NegativeCacheTTL: 30 * time.Second, // Cache errors for 30s
+})
+```
+
+**Behavior:**
+
+```go
+// First call: loader returns error
+_, err := cache.GetOrLoad(userID, func() (User, error) {
+    return User{}, fmt.Errorf("database connection failed")
+})
+// err = "database connection failed"
+// Error is cached for 30 seconds
+
+// Second call within 30s: cached error returned WITHOUT calling loader
+_, err = cache.GetOrLoad(userID, func() (User, error) {
+    panic("This will NOT be called!")
+})
+// err = "database connection failed" (from cache)
+
+// After 30s: error expires, loader called again
+time.Sleep(31 * time.Second)
+user, err := cache.GetOrLoad(userID, func() (User, error) {
+    return fetchFromDB(userID)  // Retry after error expiration
+})
+```
+
+**Example: Circuit Breaker Pattern**
+
+```go
+func getUserWithCircuitBreaker(cache *balios.GenericCache[int, User], userID int) (User, error) {
+    // Configure with negative caching
+    cache := balios.NewGenericCache[int, User](balios.Config{
+        MaxSize:          10000,
+        TTL:              5 * time.Minute,
+        NegativeCacheTTL: 10 * time.Second, // 10s circuit breaker
+    })
+    
+    return cache.GetOrLoad(userID, func() (User, error) {
+        // If this fails, subsequent requests will get cached error
+        // for 10 seconds (circuit open)
+        return fetchFromDB(userID)
+    })
+}
+```
+
+**Example: API Rate Limiting**
+
+```go
+func fetchFromAPI(apiKey string) (Data, error) {
+    cache := balios.NewGenericCache[string, Data](balios.Config{
+        MaxSize:          1000,
+        NegativeCacheTTL: 60 * time.Second, // Respect rate limits
+    })
+    
+    return cache.GetOrLoad(apiKey, func() (Data, error) {
+        resp, err := http.Get("https://api.example.com/data")
+        if err != nil {
+            return Data{}, err
+        }
+        
+        if resp.StatusCode == 429 { // Too Many Requests
+            // This error will be cached for 60s
+            return Data{}, fmt.Errorf("rate limited")
+        }
+        
+        // Parse and return data
+        return parseData(resp.Body), nil
+    })
+}
+```
+
+**Performance:**
+- Zero overhead when `NegativeCacheTTL = 0` (default)
+- Minimal overhead when enabled (sync.Map lookup)
+- Automatic expiration (no manual cleanup needed)
+- Thread-safe implementation
+
+**Best Practices:**
+
+✅ **Do use negative caching when:**
+- External service failures are common
+- Retry attempts would make situation worse
+- You want circuit breaker behavior
+- Errors are expensive to generate
+
+❌ **Don't use negative caching when:**
+- Errors are truly random/transient
+- Immediate retry might succeed
+- Error conditions change rapidly
+- You need custom error handling logic
+
+**Disabling Negative Caching:**
+
+```go
+// Default: negative caching disabled
+cache := balios.NewGenericCache[int, User](balios.Config{
+    MaxSize: 1000,
+    // NegativeCacheTTL not set or set to 0
+})
+```
 
 ## Implementation Details
 

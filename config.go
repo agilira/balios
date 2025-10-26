@@ -30,6 +30,14 @@ type Config struct {
 	// If 0, entries never expire. Default: 0 (no expiration).
 	TTL time.Duration
 
+	// NegativeCacheTTL is the time-to-live for caching loader errors.
+	// When GetOrLoad fails, the error can be cached to prevent repeated
+	// expensive operations that consistently fail.
+	// If 0, errors are not cached (default behavior).
+	// Recommended: 1-10 seconds for most use cases.
+	// Example: Database unreachable errors don't need to be retried every millisecond.
+	NegativeCacheTTL time.Duration
+
 	// CleanupInterval is how often to run cleanup of expired entries.
 	// Only used if TTL > 0. Default: TTL / 10.
 	CleanupInterval time.Duration

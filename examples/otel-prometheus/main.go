@@ -25,9 +25,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
@@ -111,7 +112,10 @@ func main() {
 	fmt.Println("🌐 Starting metrics server on :2112...")
 	http.Handle("/metrics", promhttp.Handler())
 
-	server := &http.Server{Addr: ":2112"}
+	server := &http.Server{
+		Addr:              ":2112",
+		ReadHeaderTimeout: 5 * time.Second, // Prevent Slowloris attacks
+	}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start metrics server: %v", err)
@@ -155,6 +159,30 @@ func main() {
 	fmt.Println("👋 Goodbye!")
 }
 
+// secureRandInt generates a cryptographically secure random integer in range [0, max).
+// Falls back to 0 on error (should never happen in practice).
+func secureRandInt(max int) int {
+	if max <= 0 {
+		return 0
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		// Should never happen with crypto/rand, but handle gracefully
+		return 0
+	}
+	return int(n.Int64())
+}
+
+// secureRandFloat64 generates a cryptographically secure random float64 in range [0.0, 1.0).
+func secureRandFloat64() float64 {
+	// Generate 53 random bits (mantissa of float64)
+	n, err := rand.Int(rand.Reader, big.NewInt(1<<53))
+	if err != nil {
+		return 0.0
+	}
+	return float64(n.Int64()) / float64(1<<53)
+}
+
 // runWorkload simulates realistic cache usage patterns
 func runWorkload(ctx context.Context, cache balios.Cache) {
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -183,26 +211,26 @@ func runWorkload(ctx context.Context, cache balios.Cache) {
 				operations++
 
 				// 70% gets, 20% sets, 10% deletes
-				op := rand.Float64()
+				op := secureRandFloat64()
 
 				switch {
 				case op < 0.70: // Get operations
 					// 80% hits (existing keys), 20% misses
 					var key string
-					if rand.Float64() < 0.80 {
-						key = fmt.Sprintf("key-%d", rand.Intn(500))
+					if secureRandFloat64() < 0.80 {
+						key = fmt.Sprintf("key-%d", secureRandInt(500))
 					} else {
-						key = fmt.Sprintf("missing-key-%d", rand.Intn(1000))
+						key = fmt.Sprintf("missing-key-%d", secureRandInt(1000))
 					}
 					cache.Get(key)
 
 				case op < 0.90: // Set operations
-					key := fmt.Sprintf("key-%d", rand.Intn(1000))
-					value := fmt.Sprintf("value-%d-%d", rand.Intn(1000), time.Now().Unix())
+					key := fmt.Sprintf("key-%d", secureRandInt(1000))
+					value := fmt.Sprintf("value-%d-%d", secureRandInt(1000), time.Now().Unix())
 					cache.Set(key, value)
 
 				default: // Delete operations
-					key := fmt.Sprintf("key-%d", rand.Intn(500))
+					key := fmt.Sprintf("key-%d", secureRandInt(500))
 					cache.Delete(key)
 				}
 			}

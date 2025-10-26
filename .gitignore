@@ -51,3 +51,7 @@ temp/
 
 # OS specific
 Thumbs.db
+
+# DEV specific files
+ORTHROS_INTEGRATION_PLAN.md
+ROADMAP_TO_100.md

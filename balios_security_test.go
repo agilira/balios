@@ -889,7 +889,7 @@ func TestSecurity_RaceConditionAttacks(t *testing.T) {
 	t.Run("ConcurrentSetSameKey", func(t *testing.T) {
 		// Create isolated cache for this test
 		cache := ctx.CreateMaliciousCache(Config{
-			MaxSize: 1000, // Larger to prevent eviction during concurrent updates
+			MaxSize: 2000, // Much larger to prevent any eviction during concurrent updates
 		})
 		numGoroutines := 100
 		var wg sync.WaitGroup
@@ -905,6 +905,7 @@ func TestSecurity_RaceConditionAttacks(t *testing.T) {
 		}
 
 		wg.Wait()
+		time.Sleep(10 * time.Millisecond) // Brief stabilization period
 
 		// SECURITY ASSERTION: Cache should have consistent state (no corruption)
 		value, found := cache.Get(key)

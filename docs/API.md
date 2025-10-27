@@ -105,7 +105,7 @@ Creates a cache using interface{} (legacy API for compatibility).
 
 Retrieves a value from the cache.
 
-**Performance:** 108.8 ns/op, zero allocations
+**Performance:** 109.4 ns/op, zero allocations
 
 **Returns:**
 - `value` - The stored value (zero value if not found)
@@ -123,7 +123,7 @@ if !found {
 
 Stores a key-value pair in the cache.
 
-**Performance:** 131.1 ns/op, zero allocations
+**Performance:** 138.8 ns/op, zero allocations
 
 **Behavior:**
 - Value stored until evicted or expired (if TTL set)

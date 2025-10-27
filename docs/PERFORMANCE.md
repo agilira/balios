@@ -16,11 +16,11 @@ Raw performance without parallelism:
 
 | Operation | Balios | Balios Generic | Allocations | Bytes/op |
 |-----------|--------|----------------|-------------|----------|
-| **Set** | 131.1 ns/op | 137.3 ns/op | 1 alloc | 10 B |
-| **Get** | 108.8 ns/op | 111.7 ns/op | 0 allocs | 0 B |
+| **Set** | 138.8 ns/op | 144.2 ns/op | 1 alloc | 10 B |
+| **Get** | 109.4 ns/op | 112.7 ns/op | 0 allocs | 0 B |
 
 **Analysis:**
-- Generic API overhead: **+4.7%** on Set, **+2.7%** on Get
+- Generic API overhead: **+3.9%** on Set, **+3.0%** on Get
 - Zero allocations on Get operations (cache hit)
 - Minimal memory footprint (10 bytes per Set)
 
@@ -32,12 +32,12 @@ High-concurrency scenarios (8 goroutines):
 
 | Operation | Balios | Balios Generic | Allocations | Bytes/op |
 |-----------|--------|----------------|-------------|----------|
-| **Set (Parallel)** | 42.48 ns/op | 45.28 ns/op | 1 alloc | 10 B |
-| **Get (Parallel)** | 30.52 ns/op | 31.62 ns/op | 0 allocs | 0 B |
+| **Set (Parallel)** | 36.18 ns/op | 38.30 ns/op | 1 alloc | 10 B |
+| **Get (Parallel)** | 24.68 ns/op | 25.89 ns/op | 0 allocs | 0 B |
 
 **Speedup vs Single-Thread:**
-- Set: 3.1x faster (131.1 ns → 42.48 ns)
-- Get: 3.6x faster (108.8 ns → 30.52 ns)
+- Set: 3.8x faster (138.8 ns → 36.18 ns)
+- Get: 4.4x faster (109.4 ns → 24.68 ns)
 
 **Lock-Free Advantage**: Near-linear scaling with CPU cores.
 
@@ -47,22 +47,21 @@ Realistic read/write combinations:
 
 | Workload | Balios | Balios Generic | Allocations | Bytes/op |
 |----------|--------|----------------|-------------|----------|
-| **Balanced** (50% R / 50% W) | 42.00 ns/op | 47.65 ns/op | 0 allocs | 5 B |
-| **Read-Heavy** (90% R / 10% W) | 35.54 ns/op | 37.30 ns/op | 0 allocs | 2 B |
-| **Write-Heavy** (10% R / 90% W) | 45.98 ns/op | 52.84 ns/op | 1 alloc | 9 B |
-| **Read-Only** (100% R / 0% W) | 32.94 ns/op | 34.44 ns/op | 0 allocs | 0 B |
+| **Balanced** (50% R / 50% W) | 42.09 ns/op | 69.72 ns/op | 5 allocs | 5 B |
+| **Read-Heavy** (90% R / 10% W) | 30.07 ns/op | 31.46 ns/op | 0 allocs | 2 B |
+| **Write-Heavy** (10% R / 90% W) | 40.49 ns/op | 41.63 ns/op | 1 alloc | 9 B |
+| **Read-Only** (100% R / 0% W) | 29.97 ns/op | 28.69 ns/op | 0 allocs | 0 B |
 
 **Key Insights:**
-- Best performance on read-heavy workloads (35.54 ns/op)
-- Generic overhead remains minimal (+5-15%)
+- Best performance on read-heavy workloads (30.07 ns/op)
 - Zero allocations on read-dominated patterns
 
 ### Cache Size Impact
 
 | Workload | Small Cache | Large Cache | Delta |
 |----------|-------------|-------------|-------|
-| **Small Mixed** (1K entries) | 37.36 ns/op | - | Baseline |
-| **Large Mixed** (100K entries) | - | 44.82 ns/op | +20% |
+| **Small Mixed** (1K entries) | 34.84 ns/op | - | Baseline |
+| **Large Mixed** (100K entries) | - | 42.02 ns/op | +21% |
 
 **Analysis:**
 - Larger caches have slight overhead due to:
@@ -153,10 +152,10 @@ Parallel speedup by core count (estimated):
 
 | Cores | Single-Thread | Parallel | Speedup |
 |-------|---------------|----------|---------|
-| 1 | 131.1 ns/op | 131.1 ns/op | 1.0x |
-| 2 | - | ~65 ns/op | ~2.0x |
-| 4 | - | ~45 ns/op | ~2.9x |
-| 8 | - | 42.48 ns/op | **3.1x** |
+| 1 | 138.8 ns/op | 138.8 ns/op | 1.0x |
+| 2 | - | ~69 ns/op | ~2.0x |
+| 4 | - | ~46 ns/op | ~3.0x |
+| 8 | - | 36.18 ns/op | **3.8x** |
 
 **Lock-free design** enables near-linear scaling up to CPU core count.
 
@@ -166,10 +165,10 @@ Performance vs cache size:
 
 | MaxSize | Set (ns/op) | Get (ns/op) | Notes |
 |---------|-------------|-------------|-------|
-| 1,000 | ~120 ns | ~100 ns | Optimal CPU cache usage |
-| 10,000 | 131.1 ns | 108.8 ns | Baseline (default) |
-| 100,000 | ~150 ns | ~120 ns | Still excellent |
-| 1,000,000 | ~180 ns | ~140 ns | Slight degradation |
+| 1,000 | ~130 ns | ~105 ns | Optimal CPU cache usage |
+| 10,000 | 138.8 ns | 109.4 ns | Baseline (default) |
+| 100,000 | ~155 ns | ~125 ns | Still excellent |
+| 1,000,000 | ~185 ns | ~145 ns | Slight degradation |
 
 **Recommendation**: Use largest cache that fits memory budget. Performance remains excellent even at 1M entries.
 

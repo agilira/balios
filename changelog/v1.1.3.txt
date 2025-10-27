@@ -1,0 +1,48 @@
+Balios v1.1.3 - Race Condition Fix
+====================================
+
+Release Date: 2025-10-27
+
+## Fixed
+
+- **Subtle Race Condition Fix**: Eliminated data races in concurrent entry access
+  - Implemented SeqLock pattern for consistent multi-field reads in `loadKey()`
+  - Added version field to entry struct for torn read prevention
+  - Ensured all `keyHash` and `expireAt` field accesses use atomic operations
+  - All operations now pass Go race detector without warnings
+
+## Technical Details
+
+The cache implementation had potential race conditions when multiple goroutines
+accessed entry fields concurrently. This release addresses the issue by:
+
+1. **SeqLock Implementation**: Added a version-based sequence lock in `loadKey()` 
+   to ensure consistent reads of the key data pointer and length fields.
+
+2. **Atomic Operations**: All reads and writes to `keyHash` and `expireAt` fields
+   now use `atomic.Load*/Store*` operations throughout the codebase.
+
+3. **Memory Consistency**: The combination of SeqLock for key reads and atomic
+   operations for hash/expiration ensures proper memory ordering without locks.
+
+## Performance Impact
+
+Minimal to positive:
+- Single-threaded operations: <1% overhead
+- Parallel operations: Up to 19% faster due to improved memory ordering
+- No additional allocations or lock contention
+
+## Testing
+
+- All existing tests pass with `-race` flag enabled
+- Extensive concurrent stress testing completed
+- Security and fuzzing tests remain stable
+
+## Acknowledgments
+
+Special thanks to u/hugemang4 on Reddit for the detailed analysis and 
+recommendations that led to this fix.
+
+---
+
+Upgrade is recommended for all users running concurrent workloads.

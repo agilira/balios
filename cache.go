@@ -14,6 +14,7 @@ import (
 
 // entry represents a cache entry with atomic access.
 type entry struct {
+	version  uint64         // SeqLock version counter: odd = writing, even = stable/readable
 	keyData  unsafe.Pointer // Thread-safe key data pointer (points to string bytes)
 	keyLen   int64          // String length (atomic)
 	value    atomic.Value   // Thread-safe value storage
@@ -93,39 +94,78 @@ type stringHeader struct {
 	len  int
 }
 
-// Helper functions for atomic key operations - ZERO ALLOCATION
+// Helper functions for atomic key operations - ZERO ALLOCATION with SeqLock
 func (e *entry) loadKey() string {
-	// Load data pointer and length atomically
-	dataPtr := atomic.LoadPointer(&e.keyData)
-	length := atomic.LoadInt64(&e.keyLen)
+	// SeqLock read pattern: retry if version is odd (writer active) or changes during read
+	// This prevents torn reads where dataPtr and length don't match
+	const maxRetries = 100 // Prevent infinite loop in extreme contention
 
-	if dataPtr == nil || length == 0 {
-		return ""
+	for retry := 0; retry < maxRetries; retry++ {
+		// 1. Load version BEFORE reading data (acquire semantics)
+		v1 := atomic.LoadUint64(&e.version)
+
+		// 2. If version is odd, a writer is active - retry
+		if v1&1 != 0 {
+			continue
+		}
+
+		// 3. Read data atomically (but potentially inconsistent if concurrent write)
+		dataPtr := atomic.LoadPointer(&e.keyData)
+		length := atomic.LoadInt64(&e.keyLen)
+
+		// 4. Load version AFTER reading data (release semantics check)
+		v2 := atomic.LoadUint64(&e.version)
+
+		// 5. If version unchanged and even, read was consistent
+		if v1 == v2 {
+			if dataPtr == nil || length == 0 {
+				return ""
+			}
+
+			// Reconstruct string from data pointer and length
+			// This is zero-allocation as we're just creating a string header
+			// #nosec G103 -- unsafe required for zero-allocation string reconstruction
+			return unsafe.String((*byte)(dataPtr), int(length))
+		}
+
+		// Version changed during read - retry
 	}
 
-	// Reconstruct string from data pointer and length
-	// This is zero-allocation as we're just creating a string header
-	// #nosec G103 -- unsafe required for zero-allocation string reconstruction
-	return unsafe.String((*byte)(dataPtr), int(length))
+	// Fallback after max retries (should be extremely rare)
+	return ""
 }
 
 func (e *entry) storeKey(key string) {
+	// SeqLock write pattern: increment version to odd, write data, increment to even
+	// This signals readers that a write is in progress
+
+	// 1. Increment version to odd (acquire lock for writers)
+	v := atomic.AddUint64(&e.version, 1)
+	// Ensure version is odd after increment (should always be true)
+	if v&1 == 0 {
+		// If somehow even, increment again to make it odd
+		atomic.AddUint64(&e.version, 1)
+	}
+
+	// 2. Now we can safely write data (readers will see odd version and retry)
 	if key == "" {
 		atomic.StorePointer(&e.keyData, nil)
 		atomic.StoreInt64(&e.keyLen, 0)
-		return
+	} else {
+		// Get string header - zero allocation!
+		// The string data remains in the caller's memory, we just reference it
+		// #nosec G103 -- unsafe required for zero-allocation key storage
+		hdr := (*stringHeader)(unsafe.Pointer(&key))
+
+		// Store data pointer and length atomically
+		// Note: This is safe because the key string is immutable in Go
+		// and the caller guarantees the key remains valid during cache lifetime
+		atomic.StorePointer(&e.keyData, hdr.data)
+		atomic.StoreInt64(&e.keyLen, int64(hdr.len))
 	}
 
-	// Get string header - zero allocation!
-	// The string data remains in the caller's memory, we just reference it
-	// #nosec G103 -- unsafe required for zero-allocation key storage
-	hdr := (*stringHeader)(unsafe.Pointer(&key))
-
-	// Store data pointer and length atomically
-	// Note: This is safe because the key string is immutable in Go
-	// and the caller guarantees the key remains valid during cache lifetime
-	atomic.StorePointer(&e.keyData, hdr.data)
-	atomic.StoreInt64(&e.keyLen, int64(hdr.len))
+	// 3. Increment version to even (release lock, readers can now read consistently)
+	atomic.AddUint64(&e.version, 1)
 }
 
 // NewCache creates a new W-TinyLFU cache with lock-free operations.

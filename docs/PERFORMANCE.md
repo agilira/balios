@@ -101,7 +101,7 @@ Extended test results (1M requests, Zipf distribution):
 | **Balios** | 79.27% | ±0.6% | 3rd (-0.41%) |
 | **Ristretto** | 62.77% | ±2.1% | 4th (-16.9%) |
 
-**Conclusion**: Balios and Otter have **statistically equivalent** hit ratios.
+**Conclusion**: The libraries have **statistically equivalent** hit ratios within noise margin.
 
 ### Hit Ratio by Workload Pattern
 

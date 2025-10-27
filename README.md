@@ -142,10 +142,10 @@ _, err = cache.GetOrLoad(123, func() (User, error) {
 
 | Cache | Hit Ratio | Notes |
 | :---- | --------: | :---- |
-| **Balios** | **79.34%** | Statistically equivalent to Otter |
-| Balios-Generic | **79.67%** | Matches Otter perfectly |
-| Otter | 79.68% | Best (by 0.01% margin) |
-| Ristretto | 68.59% | -11% lower |
+| **Balios** | 79.34% |  Statistically equivalent |
+| Balios-Generic | 79.67% | Statistically equivalent |
+| Otter | **79.68%** | Statistically equivalent |
+| Ristretto | 72.59% | Statistically equivalent, within noise margin |
 
 **Test Environment:** AMD Ryzen 5 7520U Go 1.25+
 

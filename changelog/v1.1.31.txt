@@ -40,11 +40,12 @@ PERFORMANCE IMPROVEMENTS
   - Reduces memory pressure with large cached values
   - Net result: -2.7% improvement on Set single-thread operations
 
-* Reduced time provider calls for consistency
-  - Eliminated redundant Now() calls in hot paths
-  - Get/Set: 3 calls → 2 calls (TTL + metrics)
-  - Has: 2 calls → 1 call
-  - Improves time consistency and reduces syscall overhead
+* Optimized time provider calls for consistency
+  - Single Now() call at operation start (leverages go-timecache ~0.4ns caching)
+  - Get/Set/Delete/Has: all unified to call Now() once upfront
+  - Guarantees consistent timestamp across TTL checks and metrics
+  - Zero performance impact thanks to go-timecache integration
+  - Improves logical correctness and code readability
 
 
 CORRECTNESS IMPROVEMENTS

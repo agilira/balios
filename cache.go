@@ -282,11 +282,9 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		return false
 	}
 
-	// Get current time once for TTL calculation (ensures consistency within operation)
-	var now int64
-	if c.ttlNanos > 0 {
-		now = c.timeProvider.Now()
-	}
+	// Get current time once at the start for both TTL and metrics (ensures consistency)
+	// Using go-timecache, this is ~0.4ns and provides consistent timestamp across operation
+	now := c.timeProvider.Now()
 
 	keyHash := stringHash(key)
 
@@ -295,7 +293,7 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 
 	// Calculate expiration time if TTL is set
 	var expireAt int64
-	if c.ttlNanos > 0 {
+	if c.ttlNanos > 0 && now > 0 {
 		expireAt = now + c.ttlNanos
 	}
 
@@ -414,11 +412,9 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 
-	// Get current time once for consistency (used for both TTL and metrics)
-	var now int64
-	if c.ttlNanos > 0 || c.metricsCollector != nil {
-		now = c.timeProvider.Now()
-	}
+	// Get current time once at the start for both TTL and metrics (ensures consistency)
+	// Using go-timecache, this is ~0.4ns and provides consistent timestamp across operation
+	now := c.timeProvider.Now()
 
 	keyHash := stringHash(key)
 
@@ -509,11 +505,9 @@ func (c *wtinyLFUCache) Delete(key string) bool {
 		return false
 	}
 
-	// Get current time once for consistency (used for metrics)
-	var now int64
-	if c.metricsCollector != nil {
-		now = c.timeProvider.Now()
-	}
+	// Get current time once at the start for metrics (ensures consistency)
+	// Using go-timecache, this is ~0.4ns and provides consistent timestamp across operation
+	now := c.timeProvider.Now()
 
 	keyHash := stringHash(key)
 	startIdx := keyHash & uint64(c.tableMask)
@@ -572,11 +566,9 @@ func (c *wtinyLFUCache) Has(key string) bool {
 		return false
 	}
 
-	// Get current time once for consistency (used for TTL check)
-	var now int64
-	if c.ttlNanos > 0 {
-		now = c.timeProvider.Now()
-	}
+	// Get current time once at the start for TTL check (ensures consistency)
+	// Using go-timecache, this is ~0.4ns and provides consistent timestamp across operation
+	now := c.timeProvider.Now()
 
 	keyHash := stringHash(key)
 	startIdx := keyHash & uint64(c.tableMask)

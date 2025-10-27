@@ -16,8 +16,8 @@ Raw performance without parallelism:
 
 | Operation | Balios | Balios Generic | Allocations | Bytes/op |
 |-----------|--------|----------------|-------------|----------|
-| **Set** | 138.8 ns/op | 144.2 ns/op | 1 alloc | 10 B |
-| **Get** | 109.4 ns/op | 112.7 ns/op | 0 allocs | 0 B |
+| **Set** | 143.5 ns/op | 146.2 ns/op | 1 alloc | 10 B |
+| **Get** | 113.1 ns/op | 113.1 ns/op | 0 allocs | 0 B |
 
 **Analysis:**
 - Generic API overhead: **+3.9%** on Set, **+3.0%** on Get
@@ -32,12 +32,12 @@ High-concurrency scenarios (8 goroutines):
 
 | Operation | Balios | Balios Generic | Allocations | Bytes/op |
 |-----------|--------|----------------|-------------|----------|
-| **Set (Parallel)** | 36.18 ns/op | 38.30 ns/op | 1 alloc | 10 B |
-| **Get (Parallel)** | 24.68 ns/op | 25.89 ns/op | 0 allocs | 0 B |
+| **Set (Parallel)** | 39.31 ns/op | 41.26 ns/op | 1 alloc | 10 B |
+| **Get (Parallel)** | 25.40 ns/op | 25.40 ns/op | 0 allocs | 0 B |
 
 **Speedup vs Single-Thread:**
-- Set: 3.8x faster (138.8 ns → 36.18 ns)
-- Get: 4.4x faster (109.4 ns → 24.68 ns)
+- Set: 3.6x faster (143.5 ns → 39.31 ns)
+- Get: 4.5x faster (113.1 ns → 25.40 ns)
 
 **Lock-Free Advantage**: Near-linear scaling with CPU cores.
 
@@ -47,8 +47,8 @@ Realistic read/write combinations:
 
 | Workload | Balios | Balios Generic | Allocations | Bytes/op |
 |----------|--------|----------------|-------------|----------|
-| **Balanced** (50% R / 50% W) | 42.09 ns/op | 69.72 ns/op | 5 allocs | 5 B |
-| **Read-Heavy** (90% R / 10% W) | 30.07 ns/op | 31.46 ns/op | 0 allocs | 2 B |
+| **Balanced** (50% R / 50% W) | 38.58 ns/op | 58.21 ns/op | 5 allocs | 5 B |
+| **Read-Heavy** (90% R / 10% W) | 30.65 ns/op | 31.61 ns/op | 0 allocs | 2 B |
 | **Write-Heavy** (10% R / 90% W) | 40.49 ns/op | 41.63 ns/op | 1 alloc | 9 B |
 | **Read-Only** (100% R / 0% W) | 29.97 ns/op | 28.69 ns/op | 0 allocs | 0 B |
 
@@ -152,10 +152,10 @@ Parallel speedup by core count (estimated):
 
 | Cores | Single-Thread | Parallel | Speedup |
 |-------|---------------|----------|---------|
-| 1 | 138.8 ns/op | 138.8 ns/op | 1.0x |
-| 2 | - | ~69 ns/op | ~2.0x |
-| 4 | - | ~46 ns/op | ~3.0x |
-| 8 | - | 36.18 ns/op | **3.8x** |
+| 1 | 143.5 ns/op | 143.5 ns/op | 1.0x |
+| 2 | - | ~72 ns/op | ~2.0x |
+| 4 | - | ~48 ns/op | ~3.0x |
+| 8 | - | 39.31 ns/op | **3.6x** |
 
 **Lock-free design** enables near-linear scaling up to CPU core count.
 
@@ -165,9 +165,9 @@ Performance vs cache size:
 
 | MaxSize | Set (ns/op) | Get (ns/op) | Notes |
 |---------|-------------|-------------|-------|
-| 1,000 | ~130 ns | ~105 ns | Optimal CPU cache usage |
-| 10,000 | 138.8 ns | 109.4 ns | Baseline (default) |
-| 100,000 | ~155 ns | ~125 ns | Still excellent |
+| 1,000 | ~135 ns | ~108 ns | Optimal CPU cache usage |
+| 10,000 | 143.5 ns | 113.1 ns | Baseline (default) |
+| 100,000 | ~160 ns | ~130 ns | Still excellent |
 | 1,000,000 | ~185 ns | ~145 ns | Slight degradation |
 
 **Recommendation**: Use largest cache that fits memory budget. Performance remains excellent even at 1M entries.

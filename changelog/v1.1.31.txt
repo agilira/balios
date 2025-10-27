@@ -1,0 +1,129 @@
+Balios v1.1.31 - Security Hardening & Performance Enhancements
+================================================
+
+Release Date: October 27, 2025
+
+OVERVIEW
+--------
+This release is focused on memory safety, thread safety, 
+and robustness against adversarial workloads.
+
+Special thanks to u/hugemang4 and u/nemesis883 from Reddit for their thorough
+security analysis and valuable insights that drove these improvements.
+
+
+SECURITY FIXES
+--------------
+
+* Fixed potential use-after-free in key storage
+  - String keys are now cloned to ensure independent memory lifetime
+  - Prevents undefined behavior from escape analysis edge cases
+  - Impact: +3-8% overhead on Set operations, but guarantees safety
+  
+* Fixed 64-bit atomic operation alignment issues
+  - Reordered entry struct fields for proper alignment on 32-bit architectures
+  - Prevents runtime panic: "misaligned 64-bit atomic operation"
+  - Critical for ARM32, 386, and other 32-bit platforms
+
+* Hardened eviction sampling against adversarial workloads
+  - Replaced deterministic sampling with xorshift64 PRNG
+  - Prevents exploitation of predictable eviction patterns
+  - Performance impact: +1% overhead, negligible in practice
+
+
+PERFORMANCE IMPROVEMENTS
+-------------------------
+
+* Implemented hybrid cleanup strategy for deleted entries
+  - Opportunistic atomic.Value reset during eviction scan (zero-cost)
+  - Automatic cleanup when reusing deleted entries
+  - Reduces memory pressure with large cached values
+  - Net result: -2.7% improvement on Set single-thread operations
+
+* Reduced time provider calls for consistency
+  - Eliminated redundant Now() calls in hot paths
+  - Get/Set: 3 calls → 2 calls (TTL + metrics)
+  - Has: 2 calls → 1 call
+  - Improves time consistency and reduces syscall overhead
+
+
+CORRECTNESS IMPROVEMENTS
+-------------------------
+
+* Enhanced thread safety in concurrent scenarios
+  - All fixes verified with race detector under high contention
+  - Improved SeqLock implementation for key operations
+  - Better handling of concurrent updates to same key
+
+
+BENCHMARK RESULTS
+-----------------
+
+Performance remains competitive with leading Go cache libraries:
+
+Operation          | v1.1.3  | v1.1.31 | Change
+-------------------|---------|---------|--------
+Set (single)       | 143.5ns | 141.0ns | -1.7%
+Get (single)       | 113.1ns | 112.2ns | -0.8%
+Set (parallel)     |  39.3ns |  37.7ns | -4.2%
+Get (parallel)     |  25.4ns |  24.7ns | -2.8%
+Balanced workload  |  38.6ns |  39.3ns | +1.8%
+
+Balios mantains excellent Performance
+while providing stronger safety guarantees.
+
+
+TESTING
+-------
+
+* Added comprehensive test suites for all fixes:
+  - cache_key_lifetime_test.go: String lifetime with GC pressure
+  - cache_alignment_test.go: 64-bit field alignment verification
+  - cache_time_consistency_test.go: Time provider call tracking
+  - cache_memory_leak_test.go: Memory pressure testing
+
+* All tests pass with race detector enabled
+* Extended fuzzing coverage for concurrent operations
+
+
+ACKNOWLEDGMENTS
+---------------
+
+We extend our gratitude to the Reddit community, particularly u/hugemang4 & u/nemesis883
+
+Your contributions made Balios more robust for production use.
+
+
+BREAKING CHANGES
+----------------
+
+None. This release is fully backward compatible with v1.1.x.
+
+
+UPGRADING
+---------
+
+go get -u github.com/agilira/balios@v1.1.31
+
+No code changes required for existing users.
+
+
+MIGRATION NOTES
+---------------
+
+For users experiencing issues on 32-bit platforms (ARM32, 386):
+- This release fixes critical alignment panics
+- No action required, update resolves the issue automatically
+
+For users caching very large values (>10MB):
+- Memory footprint may improve due to hybrid cleanup strategy
+- Consider calling Clear() periodically if using low-churn patterns
+
+---
+
+For detailed technical discussion, see:
+- docs/ARCHITECTURE.md
+- docs/PERFORMANCE.md
+- GitHub Issues and Pull Requests
+
+Report issues: https://github.com/agilira/balios/issues

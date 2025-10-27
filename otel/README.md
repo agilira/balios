@@ -214,7 +214,7 @@ Example Grafana panels:
 
 Benchmark comparison:
 ```
-BenchmarkCache_Get_NoMetrics    10000000    109.4 ns/op
+BenchmarkCache_Get_NoMetrics    10000000    113.1 ns/op
 BenchmarkCache_Get_WithOTel     9500000     115.2 ns/op  (+5.9%)
 ```
 

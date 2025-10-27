@@ -115,27 +115,27 @@ _, err = cache.GetOrLoad(123, func() (User, error) {
 
 | Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
 | :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **138.8 ns/op** | **+0%** | **109.4 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 144.2 ns/op | +4% | 112.7 ns/op | +3% | 1/0 allocs/op |
-| Otter | 330.0 ns/op | +138% | 122.9 ns/op | +12% | 1/0 allocs/op |
-| Ristretto | 272.6 ns/op | +96% | 142.7 ns/op | +30% | 2/0 allocs/op |
+| **Balios** | **143.5 ns/op** | **+0%** | **113.1 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 146.2 ns/op | +2% | 113.1 ns/op | +0% | 1/0 allocs/op |
+| Otter | 345.9 ns/op | +141% | 119.9 ns/op | +6% | 1/0 allocs/op |
+| Ristretto | 278.7 ns/op | +94% | 157.2 ns/op | +39% | 2/0 allocs/op |
 
 **Parallel Performance (8 cores):**
 
 | Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
 | :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **36.18 ns/op** | **+0%** | **24.68 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 38.30 ns/op | +6% | 25.89 ns/op | +5% | 1/0 allocs/op |
-| Otter | 231.4 ns/op | +540% | 25.79 ns/op | +5% | 1/0 allocs/op |
-| Ristretto | 131.2 ns/op | +263% | 32.90 ns/op | +33% | 1/0 allocs/op |
+| **Balios** | **39.31 ns/op** | **+0%** | **25.40 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 41.26 ns/op | +5% | 25.40 ns/op | +0% | 1/0 allocs/op |
+| Otter | 237.0 ns/op | +503% | 23.99 ns/op | -6% | 1/0 allocs/op |
+| Ristretto | 114.8 ns/op | +192% | 30.80 ns/op | +21% | 1/0 allocs/op |
 
 **Mixed Workloads (Realistic Scenarios):**
 
 | Workload | Balios | Balios-Generic | Otter | Ristretto | Best |
 | :------- | -----: | -------------: | ----: | --------: | :--- |
 | Write-Heavy (10% R / 90% W) | **40.49 ns/op** | 41.63 ns/op | 219.7 ns/op | 184.9 ns/op | **Balios** |
-| Balanced (50% R / 50% W) | **42.09 ns/op** | 69.72 ns/op | 129.7 ns/op | 169.5 ns/op | **Balios** |
-| Read-Heavy (90% R / 10% W) | **30.07 ns/op** | 31.46 ns/op | 50.62 ns/op | 144.1 ns/op | **Balios** |
+| Balanced (50% R / 50% W) | **38.58 ns/op** | 58.21 ns/op | 132.9 ns/op | 108.6 ns/op | **Balios** |
+| Read-Heavy (90% R / 10% W) | **30.65 ns/op** | 31.61 ns/op | 57.42 ns/op | 117.4 ns/op | **Balios** |
 | Read-Only (100% R) | **29.97 ns/op** | 28.69 ns/op | 28.41 ns/op | 35.05 ns/op | **Otter** |
 
 **Hit Ratio (100K requests, Zipf distribution):**

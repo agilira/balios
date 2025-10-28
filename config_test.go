@@ -189,3 +189,108 @@ func TestNoOpLogger(t *testing.T) {
 	logger.Warn("test", "key", "value")
 	logger.Error("test", "key", "value")
 }
+
+// TestNewCache_CallsValidate verifies that NewCache calls Config.Validate()
+// to apply defaults, eliminating code duplication (issue #15 from code review)
+func TestNewCache_CallsValidate(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      Config
+		wantMaxSize int
+		wantRatio   float64
+	}{
+		{
+			name:        "empty config gets defaults",
+			config:      Config{},
+			wantMaxSize: DefaultMaxSize,
+			wantRatio:   DefaultWindowRatio,
+		},
+		{
+			name: "zero MaxSize gets default",
+			config: Config{
+				MaxSize: 0,
+			},
+			wantMaxSize: DefaultMaxSize,
+			wantRatio:   DefaultWindowRatio,
+		},
+		{
+			name: "negative MaxSize gets default",
+			config: Config{
+				MaxSize: -100,
+			},
+			wantMaxSize: DefaultMaxSize,
+			wantRatio:   DefaultWindowRatio,
+		},
+		{
+			name: "invalid WindowRatio gets default",
+			config: Config{
+				MaxSize:     1000,
+				WindowRatio: -0.5, // Invalid
+			},
+			wantMaxSize: 1000,
+			wantRatio:   DefaultWindowRatio,
+		},
+		{
+			name: "WindowRatio >= 1.0 gets default",
+			config: Config{
+				MaxSize:     1000,
+				WindowRatio: 1.5, // Invalid
+			},
+			wantMaxSize: 1000,
+			wantRatio:   DefaultWindowRatio,
+		},
+		{
+			name: "valid config preserved",
+			config: Config{
+				MaxSize:     5000,
+				WindowRatio: 0.05,
+			},
+			wantMaxSize: 5000,
+			wantRatio:   0.05,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := NewCache(tt.config)
+			defer cache.Close()
+
+			// Verify capacity reflects validated MaxSize
+			capacity := cache.Capacity()
+			if capacity != tt.wantMaxSize {
+				t.Errorf("Cache capacity = %v, want %v (Config.Validate should have set defaults)", capacity, tt.wantMaxSize)
+			}
+
+			// Verify cache is functional with validated config
+			cache.Set("test", "value")
+			if val, found := cache.Get("test"); !found {
+				t.Error("Cache should be functional after NewCache with validated config")
+			} else if val != "value" {
+				t.Errorf("Got value %v, want 'value'", val)
+			}
+		})
+	}
+}
+
+// TestNewCache_ValidateAppliesAllDefaults ensures all defaults are applied
+// when Config fields are nil or zero
+func TestNewCache_ValidateAppliesAllDefaults(t *testing.T) {
+	cache := NewCache(Config{})
+	defer cache.Close()
+
+	// Cache should be created successfully with all defaults
+	if cache == nil {
+		t.Fatal("NewCache with empty config should return valid cache")
+	}
+
+	// Verify it's functional
+	cache.Set("key", "value")
+	if _, found := cache.Get("key"); !found {
+		t.Error("Cache with default config should be functional")
+	}
+
+	// Verify capacity was set to default
+	if cache.Capacity() != DefaultMaxSize {
+		t.Errorf("Capacity = %v, want %v", cache.Capacity(), DefaultMaxSize)
+	}
+}

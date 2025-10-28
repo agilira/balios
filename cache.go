@@ -209,19 +209,9 @@ func (e *entry) storeKey(key string) {
 
 // NewCache creates a new W-TinyLFU cache with lock-free operations.
 func NewCache(config Config) Cache {
-	// Apply configuration defaults
-	if config.MaxSize <= 0 {
-		config.MaxSize = DefaultMaxSize
-	}
-	if config.WindowRatio <= 0 {
-		config.WindowRatio = DefaultWindowRatio
-	}
-	if config.TimeProvider == nil {
-		config.TimeProvider = &systemTimeProvider{}
-	}
-	if config.MetricsCollector == nil {
-		config.MetricsCollector = NoOpMetricsCollector{}
-	}
+	// Apply configuration defaults via Validate()
+	// This ensures consistent validation logic and eliminates duplication
+	_ = config.Validate() // Error is always nil (only sets defaults)
 
 	// Hash table size: power of 2, at least 2x maxSize for good load factor
 	tableSize := nextPowerOf2(config.MaxSize * 2)

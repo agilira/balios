@@ -64,7 +64,22 @@ type Config struct {
 	OnExpire func(key string, value interface{})
 }
 
-// Validate checks if the configuration is valid and sets defaults.
+// Validate checks configuration parameters and applies sensible defaults.
+// Returns nil (no actual validation errors, only normalization).
+//
+// This method is automatically called by NewCache and NewGenericCache,
+// so you typically don't need to call it manually. However, it's provided
+// as a public API if you want to inspect the normalized configuration
+// before creating a cache.
+//
+// Default values applied:
+//   - MaxSize: DefaultMaxSize (10,000) if <= 0
+//   - WindowRatio: DefaultWindowRatio (0.01) if <= 0 or >= 1
+//   - CounterBits: DefaultCounterBits (4) if < 1 or > 8
+//   - CleanupInterval: TTL/10 if TTL > 0 and CleanupInterval <= 0
+//   - Logger: NoOpLogger{} if nil
+//   - TimeProvider: systemTimeProvider{} if nil
+//   - MetricsCollector: NoOpMetricsCollector{} if nil
 func (c *Config) Validate() error {
 	if c.MaxSize <= 0 {
 		c.MaxSize = DefaultMaxSize

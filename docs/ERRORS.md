@@ -286,45 +286,6 @@ func SafeCacheOperation() (err error) {
 }
 ```
 
-## Migration Guide
-
-If you have existing error handling code, here's how to migrate:
-
-### Before (Simple Errors)
-```go
-if !cache.Set(key, value, 0) {
-    return fmt.Errorf("failed to set cache value")
-}
-```
-
-### After (Structured Errors)
-```go
-if !cache.Set(key, value, 0) {
-    return balios.NewErrSetFailed(key, "cache full or eviction failed")
-}
-```
-
-### Before (Simple Checks)
-```go
-_, found := cache.Get(key)
-if !found {
-    return errors.New("key not found")
-}
-```
-
-### After (Structured Checks)
-```go
-value, found := cache.Get(key)
-if !found {
-    return balios.NewErrKeyNotFound(key)
-}
-
-// Or check error type:
-if balios.IsNotFound(err) {
-    // Handle not found
-}
-```
-
 ## See Also
 
 - [go-errors Documentation](https://github.com/agilira/go-errors)

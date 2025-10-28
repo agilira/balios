@@ -510,83 +510,6 @@ type TimeProvider interface {
 
 ## Advanced Features
 
-### Hot Configuration Reload
-
-Dynamic configuration updates without restarting, powered by [Argus](https://github.com/agilira/argus).
-
-#### Types
-
-```go
-type HotConfig struct {
-    OnReload func(oldConfig, newConfig Config)
-    // contains filtered or unexported fields
-}
-
-type HotConfigOptions struct {
-    ConfigPath   string        // Path to config file (JSON, YAML, TOML, HCL, INI, Properties)
-    PollInterval time.Duration // Check interval (default: 1s, min: 100ms)
-    OnReload     func(oldConfig, newConfig Config)
-    Logger       Logger        // Optional logger
-}
-```
-
-#### Functions
-
-**`NewHotConfig(cache Cache, opts HotConfigOptions) (*HotConfig, error)`**
-
-Creates a hot-reloadable configuration watcher.
-
-**`Start() error`**  
-Begins watching the configuration file.
-
-**`Stop() error`**  
-Stops watching the configuration file.
-
-**`GetConfig() Config`**  
-Returns current configuration (thread-safe).
-
-#### Example
-
-```go
-hotConfig, err := balios.NewHotConfig(cache, balios.HotConfigOptions{
-    ConfigPath:   "/etc/myapp/cache.yaml",
-    PollInterval: 30 * time.Second,
-    OnReload: func(old, new balios.Config) {
-        log.Printf("Config reloaded: MaxSize %d -> %d", old.MaxSize, new.MaxSize)
-    },
-})
-if err != nil {
-    log.Fatal(err)
-}
-
-if err := hotConfig.Start(); err != nil {
-    log.Fatal(err)
-}
-defer hotConfig.Stop()
-
-// Configuration updates are applied automatically
-```
-
-#### Configuration File Format (YAML example)
-
-```yaml
-cache:
-  max_size: 20000
-  ttl: 1h
-  window_ratio: 0.01
-  counter_bits: 4
-```
-
-**Supported Keys:**
-- `cache.max_size` (int) - Maximum cache entries
-- `cache.ttl` (duration string) - Time-to-live (e.g., "1h", "30m")
-- `cache.window_ratio` (float) - Window cache ratio (0.0-1.0)
-- `cache.counter_bits` (int) - Frequency counter bits (1-8)
-
-**Note:** MaxSize changes require cache reconstruction and are not applied dynamically in the current version. Only TTL and other runtime parameters support hot reload.
-
----
-
 ### Memory Layout (10,000 entry cache)
 
 ```
@@ -671,11 +594,9 @@ go func() { stats := cache.Stats() }()
 ## Related Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - W-TinyLFU internals, lock-free design
-- **[PERFORMANCE.md](PERFORMANCE.md)** - Benchmark results, hit ratio analysis
 - **[GETORLOAD.md](GETORLOAD.md)** - Cache stampede prevention, singleflight pattern
 - **[METRICS.md](METRICS.md)** - Observability, PromQL queries, Grafana dashboards
 - **[ERRORS.md](ERRORS.md)** - Error codes, structured errors
-- **[FUZZING.md](FUZZING.md)** - Fuzz testing guide, security hardening
 
 ---
 

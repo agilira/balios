@@ -344,7 +344,6 @@ Wrapper packages can evolve independently and may have different version numbers
 - [ ] `balios-adaptive` - Adaptive expiration wrapper
 - [ ] `balios-persist` - Persistence layer wrapper
 - [ ] `balios-replicated` - Multi-node replication wrapper
-- [ ] Community wrapper showcase
 - [ ] Wrapper performance comparison benchmarks
 
 ---
@@ -364,7 +363,6 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
 
 - **GitHub Issues**: [github.com/agilira/balios/issues](https://github.com/agilira/balios/issues)
 - **Discussions**: [github.com/agilira/balios/discussions](https://github.com/agilira/balios/discussions)
-- **Email**: balios@agilira.com
 
 ---
 

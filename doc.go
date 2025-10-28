@@ -329,7 +329,6 @@
 //
 // Detailed documentation:
 //   - docs/ARCHITECTURE.md: W-TinyLFU internals, lock-free design
-//   - docs/PERFORMANCE.md: Benchmark results, hit ratio analysis
 //   - docs/GETORLOAD.md: Cache stampede prevention, singleflight pattern
 //   - docs/METRICS.md: Observability, PromQL queries, Grafana dashboards
 //   - docs/ERRORS.md: Error codes, structured errors

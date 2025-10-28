@@ -67,8 +67,9 @@ func TestNegativeCacheMemoryLeak(t *testing.T) {
 	// WITH FIX: Background cleanup removes them
 
 	// Check if expired entries are still there
+	// IMPORTANT: Use timeProvider.Now() for consistency with how entries are created
 	expiredCount := 0
-	now := time.Now().UnixNano()
+	now := cache.(*wtinyLFUCache).timeProvider.Now()
 	cache.(*wtinyLFUCache).negativeCache.Range(func(key, value interface{}) bool {
 		neg := value.(negativeEntry)
 		if now > neg.expireAt {

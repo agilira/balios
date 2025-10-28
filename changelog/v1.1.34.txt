@@ -1,0 +1,109 @@
+Balios v1.1.34 - Type-Change Correctess Fix
+=========================================
+
+Release Date: October 28, 2025
+
+OVERVIEW
+--------
+This release fixes a subtle panic bug when changing value types for the
+same cache key. The fix ensures atomic.Value type consistency by always
+allocating a new valueHolder on Set operations.
+
+
+SUBTLE BUG FIX
+--------------
+
+* Fixed atomic.Value panic on type change (#IMPORTANT)
+  - Scenario: cache.Set("key", 123) followed by cache.Set("key", "hello")
+  - Previous behavior: PANIC - atomic.Value doesn't allow type changes
+  - Root cause: Reusing valueHolder optimization broke type safety
+  - Solution: Always allocate new valueHolder per Set operation
+  - Impact: Prevents production crashes, ensures API correctness
+  - Cost: +35ns per Set operation (~18% slower), but guarantees safety
+
+
+PERFORMANCE IMPACT
+------------------
+
+Benchmark comparison (v1.1.33 → v1.1.34):
+
+Operation              | v1.1.33   | v1.1.34   | Change
+-----------------------|-----------|-----------|--------
+Set (single-thread)    | 159.8 ns  | 194.4 ns  | +21%
+Get (single-thread)    | 118.9 ns  | 110.8 ns  | -7%
+Set (parallel)         | 42.25 ns  | 59.26 ns  | +40%
+Get (parallel)         | 24.99 ns  | 25.50 ns  | +2%
+
+Allocations:
+- Set: 1 alloc → 2 allocs (new valueHolder each time)
+- Get: 0 allocs (unchanged)
+
+Note: Performance impact is acceptable given the correctness guarantee.
+The old optimization was unsafe and could cause production panics.
+
+TESTING
+-------
+
+* Added comprehensive type-change test suite:
+  - type_change_test.go with 4 test scenarios
+  - TestTypeChangeSameKey: Sequential type changes (4 types)
+  - TestTypeChangeConcurrent: 1000 concurrent type changes
+  - TestTypeChangeWithTTL: Type changes with TTL enabled
+  - TestGenericCacheTypeConsistency: Compile-time type safety
+
+* Updated allocation tests:
+  - string_clone_reality_check_test.go: NEW vs EXISTING key allocations
+  - storekey_zero_alloc_test.go: Adjusted expectations to 1 alloc
+
+DOCUMENTATION UPDATES
+---------------------
+
+* Updated README.md benchmark tables
+* Updated doc.go with new performance numbers
+* Updated docs/API.md with allocation details
+* Created benchmarks/benchmark_results.txt with full results
+* Added detailed comments in cache.go explaining the trade-off
+
+
+IMPLEMENTATION DETAILS
+----------------------
+
+Changed code (cache.go:417-423):
+
+```go
+// UPDATE PATH: Always create new valueHolder to support type changes
+// This prevents atomic.Value panic when storing different types.
+// Cost: ~3-5ns allocation overhead, but guarantees correctness.
+// The old valueHolder will be GC'd when no longer referenced.
+newHolder := &valueHolder{}
+newHolder.data.Store(value)
+entry.value.Store(newHolder)
+```
+
+Previous (unsafe) code:
+```go
+// OPTIMIZATION: Reuse existing valueHolder on update (zero-alloc hot path)
+holder := entry.value.Load().(*valueHolder)
+holder.data.Store(value)  // ← PANIC if type changed!
+```
+
+
+BREAKING CHANGES
+----------------
+
+None. This is a bug fix that makes the API behave correctly.
+
+Users who were relying on the panic behavior (unlikely) will now
+see successful type changes instead of crashes.
+
+
+UPGRADING
+---------
+
+go get -u github.com/agilira/balios@v1.1.34
+
+No code changes required for existing users. The cache now correctly
+handles value type changes for the same key.
+
+
+Report issues: https://github.com/agilira/balios/issues

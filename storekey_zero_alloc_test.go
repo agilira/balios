@@ -11,7 +11,8 @@ import (
 	"testing"
 )
 
-// TestStoreKeyZeroAllocation verifies that storeKey() no longer allocates
+// TestStoreKeyZeroAllocation verifies that storeKey() allocation behavior
+// After type-change safety fix: Set allocates 1 new valueHolder per operation
 func TestStoreKeyZeroAllocation(t *testing.T) {
 	cache := NewCache(Config{
 		MaxSize: 1000,
@@ -27,13 +28,15 @@ func TestStoreKeyZeroAllocation(t *testing.T) {
 		cache.Set("test-key", "test-value")
 	})
 
-	// With the fix, Set should do 0 allocations (just atomic operations)
-	// Note: The test framework itself might add ~1 alloc, so we allow up to 1
+	// After type-change fix: expect 1 alloc for new valueHolder
+	// This prevents atomic.Value panic when types change
 	if allocsBefore > 1.5 {
-		t.Errorf("Set() allocates too much: %.2f allocs/op (expected ≤1, ideally 0)", allocsBefore)
-		t.Logf("This suggests storeKey() is still allocating on heap")
+		t.Errorf("Set() allocates too much: %.2f allocs/op (expected ≤1)", allocsBefore)
+		t.Logf("This suggests additional unexpected allocations")
+	} else if allocsBefore >= 0.5 {
+		t.Logf("Set() allocations: %.2f allocs/op (expected: ~1 for valueHolder)", allocsBefore)
 	} else {
-		t.Logf("Set() allocations: %.2f allocs/op (excellent!)", allocsBefore)
+		t.Logf("✅ Set() allocations: %.2f allocs/op (excellent!)", allocsBefore)
 	}
 }
 

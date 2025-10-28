@@ -1,44 +1,78 @@
-goos: windows
-goarch: amd64
-pkg: github.com/agilira/balios/benchmarks
-cpu: AMD Ryzen 5 7520U with Radeon Graphics
-BenchmarkBalios_Set_SingleThread-8               7565774               159.8 ns/op            10 B/op              1 allocs/op
-BenchmarkBaliosGeneric_Set_SingleThread-8        7362472               165.6 ns/op            10 B/op              1 allocs/op
-BenchmarkOtter_Set_SingleThread-8                3243168               413.5 ns/op            51 B/op              1 allocs/op
-BenchmarkRistretto_Set_SingleThread-8            3995684               292.6 ns/op           104 B/op              2 allocs/op
-BenchmarkBalios_Get_SingleThread-8               9937665               118.9 ns/op             0 B/op              0 allocs/op
-BenchmarkBaliosGeneric_Get_SingleThread-8       10295656               117.6 ns/op             0 B/op              0 allocs/op
-BenchmarkOtter_Get_SingleThread-8                9538867               126.4 ns/op             0 B/op              0 allocs/op
-BenchmarkRistretto_Get_SingleThread-8            7808920               154.6 ns/op             8 B/op              0 allocs/op
-BenchmarkBalios_Set_Parallel-8                  25257999                42.25 ns/op           10 B/op              1 allocs/op
-BenchmarkBaliosGeneric_Set_Parallel-8           28041994                45.47 ns/op           10 B/op              1 allocs/op
-BenchmarkOtter_Set_Parallel-8                    4433698               260.2 ns/op            50 B/op              1 allocs/op
-BenchmarkRistretto_Set_Parallel-8                9630021               112.5 ns/op            85 B/op              1 allocs/op
-BenchmarkBalios_Get_Parallel-8                  42264384                24.99 ns/op            0 B/op              0 allocs/op
-BenchmarkBaliosGeneric_Get_Parallel-8           40450755                27.24 ns/op            0 B/op              0 allocs/op
-BenchmarkOtter_Get_Parallel-8                   43648743                25.48 ns/op            0 B/op              0 allocs/op
-BenchmarkRistretto_Get_Parallel-8               36973815                30.52 ns/op            1 B/op              0 allocs/op
-BenchmarkBalios_WriteHeavy-8                    23128116                46.52 ns/op            9 B/op              1 allocs/op
-BenchmarkBaliosGeneric_WriteHeavy-8             24282222                49.99 ns/op            9 B/op              1 allocs/op
-BenchmarkOtter_WriteHeavy-8                      5178220               227.8 ns/op            45 B/op              1 allocs/op
-BenchmarkRistretto_WriteHeavy-8                  8874859               147.6 ns/op            77 B/op              1 allocs/op
-BenchmarkBalios_Balanced-8                      25904833                42.50 ns/op            6 B/op              0 allocs/op
-BenchmarkBaliosGeneric_Balanced-8               26510490                43.87 ns/op            6 B/op              0 allocs/op
-BenchmarkOtter_Balanced-8                        8244412               136.5 ns/op            25 B/op              0 allocs/op
-BenchmarkRistretto_Balanced-8                    9936349               107.9 ns/op            47 B/op              0 allocs/op
-BenchmarkBalios_ReadHeavy-8                     31491930                32.38 ns/op            2 B/op              0 allocs/op
-BenchmarkBaliosGeneric_ReadHeavy-8              31044250                33.74 ns/op            2 B/op              0 allocs/op
-BenchmarkOtter_ReadHeavy-8                      22796136                50.00 ns/op            7 B/op              0 allocs/op
-BenchmarkRistretto_ReadHeavy-8                  16410255                72.58 ns/op           15 B/op              0 allocs/op
-BenchmarkBalios_ReadOnly-8                      38698940                28.24 ns/op            0 B/op              0 allocs/op
-BenchmarkBaliosGeneric_ReadOnly-8               35343494                29.54 ns/op            0 B/op              0 allocs/op
-BenchmarkOtter_ReadOnly-8                       46124220                27.20 ns/op            0 B/op              0 allocs/op
-BenchmarkRistretto_ReadOnly-8                   36581907                35.41 ns/op            1 B/op              0 allocs/op
-BenchmarkBalios_Small_Mixed-8                   28401693                40.69 ns/op            4 B/op              0 allocs/op
-BenchmarkOtter_Small_Mixed-8                     9439802               127.3 ns/op            25 B/op              0 allocs/op
-BenchmarkRistretto_Small_Mixed-8                 9329090               125.6 ns/op            48 B/op              0 allocs/op
-BenchmarkBalios_Large_Mixed-8                   23001372                44.05 ns/op            7 B/op              0 allocs/op
-BenchmarkOtter_Large_Mixed-8                     7396554               159.4 ns/op            26 B/op              0 allocs/op
-BenchmarkRistretto_Large_Mixed-8                10634432                94.30 ns/op           45 B/op              0 allocs/op
-PASS
-ok  	github.com/agilira/balios/benchmarks	52.633s
+Balios Cache Benchmarks
+=======================
+Date: October 28, 2025
+Hardware: AMD Ryzen 5 7520U with Radeon Graphics
+Go Version: 1.25+
+OS: Windows (amd64)
+
+Single-Threaded Performance
+----------------------------
+BenchmarkBalios_Set_SingleThread-8              17974251               194.4 ns/op            26 B/op              2 allocs/op
+BenchmarkBaliosGeneric_Set_SingleThread-8       18113480               198.2 ns/op            26 B/op              2 allocs/op
+BenchmarkOtter_Set_SingleThread-8                8939976               365.3 ns/op            52 B/op              1 allocs/op
+BenchmarkRistretto_Set_SingleThread-8           11932604               280.0 ns/op           104 B/op              2 allocs/op
+
+BenchmarkBalios_Get_SingleThread-8              32055717               110.8 ns/op             0 B/op              0 allocs/op
+BenchmarkBaliosGeneric_Get_SingleThread-8       29958681               115.0 ns/op             0 B/op              0 allocs/op
+BenchmarkOtter_Get_SingleThread-8               28663720               121.2 ns/op             0 B/op              0 allocs/op
+BenchmarkRistretto_Get_SingleThread-8           23095887               156.7 ns/op             8 B/op              0 allocs/op
+
+Parallel Performance (8 cores)
+-------------------------------
+BenchmarkBalios_Set_Parallel-8                  60964353                59.26 ns/op           26 B/op              2 allocs/op
+BenchmarkBaliosGeneric_Set_Parallel-8           55563100                60.84 ns/op           26 B/op              2 allocs/op
+BenchmarkOtter_Set_Parallel-8                   14607152               240.1 ns/op            50 B/op              1 allocs/op
+BenchmarkRistretto_Set_Parallel-8               27559260               115.1 ns/op            85 B/op              1 allocs/op
+
+BenchmarkBalios_Get_Parallel-8                  139151439               25.50 ns/op            0 B/op              0 allocs/op
+BenchmarkBaliosGeneric_Get_Parallel-8           133526065               27.33 ns/op            0 B/op              0 allocs/op
+BenchmarkOtter_Get_Parallel-8                   143874741               25.78 ns/op            0 B/op              0 allocs/op
+BenchmarkRistretto_Get_Parallel-8               100000000               30.04 ns/op            1 B/op              0 allocs/op
+
+Mixed Workloads
+---------------
+BenchmarkBalios_WriteHeavy-8                    52205084                85.82 ns/op           24 B/op              2 allocs/op
+BenchmarkBaliosGeneric_WriteHeavy-8             31697031               100.7 ns/op            24 B/op              2 allocs/op
+BenchmarkOtter_WriteHeavy-8                     17054904               210.3 ns/op            45 B/op              1 allocs/op
+BenchmarkRistretto_WriteHeavy-8                 25792768               125.4 ns/op            77 B/op              1 allocs/op
+
+BenchmarkBalios_Balanced-8                      65610698                50.01 ns/op           13 B/op              1 allocs/op
+BenchmarkBaliosGeneric_Balanced-8               63948727                52.81 ns/op           13 B/op              1 allocs/op
+BenchmarkOtter_Balanced-8                       26578033               132.5 ns/op            25 B/op              0 allocs/op
+BenchmarkRistretto_Balanced-8                   26763073               113.2 ns/op            47 B/op              0 allocs/op
+
+BenchmarkBalios_ReadHeavy-8                     93508436                35.08 ns/op            3 B/op              0 allocs/op
+BenchmarkBaliosGeneric_ReadHeavy-8              87386700                36.84 ns/op            3 B/op              0 allocs/op
+BenchmarkOtter_ReadHeavy-8                      69536192                47.64 ns/op            7 B/op              0 allocs/op
+BenchmarkRistretto_ReadHeavy-8                  45472860                70.81 ns/op           15 B/op              0 allocs/op
+
+BenchmarkBalios_ReadOnly-8                      100000000               36.59 ns/op            0 B/op              0 allocs/op
+BenchmarkBaliosGeneric_ReadOnly-8               61313434                55.91 ns/op            0 B/op              0 allocs/op
+BenchmarkOtter_ReadOnly-8                       74865709                46.95 ns/op            0 B/op              0 allocs/op
+BenchmarkRistretto_ReadOnly-8                   113701263               31.63 ns/op            1 B/op              0 allocs/op
+
+Cache Size Variations
+----------------------
+BenchmarkBalios_Small_Mixed-8                   76024107                44.33 ns/op           12 B/op              1 allocs/op
+BenchmarkOtter_Small_Mixed-8                    28690722               124.5 ns/op            25 B/op              0 allocs/op
+BenchmarkRistretto_Small_Mixed-8                26241553               122.3 ns/op            48 B/op              0 allocs/op
+
+BenchmarkBalios_Large_Mixed-8                   63640894                49.67 ns/op           14 B/op              1 allocs/op
+BenchmarkOtter_Large_Mixed-8                    21770760               157.8 ns/op            26 B/op              0 allocs/op
+BenchmarkRistretto_Large_Mixed-8                37653522               100.1 ns/op            45 B/op              0 allocs/op
+
+Summary
+-------
+Total runtime: 161.431s
+
+Performance Highlights:
+- Balios is fastest for single-threaded Set operations (194.4 ns/op)
+- Balios is fastest for single-threaded Get operations (110.8 ns/op)
+- Balios maintains excellent parallel scalability
+- Balios wins in all realistic mixed workloads (Write-Heavy, Balanced, Read-Heavy)
+- Zero allocations on Get operations across all scenarios
+- 2 allocations per Set (valueHolder + potential other overhead)
+
+Note: After type-change safety fix, Set operations now allocate 1 new valueHolder
+per operation to prevent atomic.Value panic when value types change for same key.
+This adds ~35ns overhead vs previous implementation but guarantees correctness.

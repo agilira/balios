@@ -220,13 +220,13 @@
 //
 // Benchmark results (AMD Ryzen 5 7520U, Go 1.25+):
 //
-//	BenchmarkBalios_Set_SingleThread-8       7565774   159.8 ns/op    10 B/op    1 allocs/op
-//	BenchmarkBalios_Get_SingleThread-8       9937665   118.9 ns/op     0 B/op    0 allocs/op
-//	BenchmarkBalios_Set_Parallel-8          25257999    42.25 ns/op   10 B/op    1 allocs/op
-//	BenchmarkBalios_Get_Parallel-8          42264384    24.99 ns/op    0 B/op    0 allocs/op
+//	BenchmarkBalios_Set_SingleThread-8      17974251   194.4 ns/op    26 B/op    2 allocs/op
+//	BenchmarkBalios_Get_SingleThread-8      32055717   110.8 ns/op     0 B/op    0 allocs/op
+//	BenchmarkBalios_Set_Parallel-8          60964353    59.26 ns/op   26 B/op    2 allocs/op
+//	BenchmarkBalios_Get_Parallel-8         139151439    25.50 ns/op    0 B/op    0 allocs/op
 //
 // Key characteristics:
-//   - Zero allocations on hot path (Get/Set)
+//   - Zero allocations on Get operations
 //   - Lock-free reads (except during eviction)
 //   - Excellent parallel scalability
 //   - Sub-microsecond latencies

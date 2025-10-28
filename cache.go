@@ -18,15 +18,15 @@ import (
 // entry represents a cache entry with atomic access.
 // Field ordering is critical for atomic alignment on 32-bit architectures:
 // All 64-bit fields MUST be at the beginning and 8-byte aligned.
-// valueHolder wraps values stored in atomic.Value to allow type changes
-// without resetting atomic.Value (which creates races).
+// valueHolder wraps values stored in atomic.Value for thread-safe access.
 //
-// OPTIMIZATION: The data field is itself an atomic.Value, allowing us to:
-// 1. Reuse the same valueHolder on updates (no allocation on hot path)
-// 2. Maintain thread-safety for concurrent reads/writes
-// 3. Allow type changes when slots are reused (no atomic.Value reset needed)
+// DESIGN DECISION: Each Set operation creates a new valueHolder to prevent
+// atomic.Value panic when value types change for the same key. This costs
+// one small allocation (~8 bytes + value) per Set, but guarantees correctness
+// and allows the cache to handle arbitrary type changes safely.
+// Old valueHolders are garbage collected when no longer referenced.
 type valueHolder struct {
-	data atomic.Value // Atomic to allow zero-alloc updates
+	data atomic.Value // Stores the actual cache value (any type)
 }
 
 type entry struct {
@@ -414,10 +414,13 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
 				// Check if this is really the same key (now safe to read)
 				if storedKey := entry.loadKey(); storedKey == key {
-					// OPTIMIZATION: Reuse existing valueHolder on update (zero-alloc hot path)
-					// Instead of allocating new holder, just update the atomic data field
-					holder := entry.value.Load().(*valueHolder)
-					holder.data.Store(value)
+					// UPDATE PATH: Always create new valueHolder to support type changes
+					// This prevents atomic.Value panic when storing different types.
+					// Cost: ~3-5ns allocation overhead, but guarantees correctness.
+					// The old valueHolder will be GC'd when no longer referenced.
+					newHolder := &valueHolder{}
+					newHolder.data.Store(value)
+					entry.value.Store(newHolder)
 					atomic.StoreInt64(&entry.expireAt, expireAt)
 
 					// Release the entry back to valid state

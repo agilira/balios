@@ -8,7 +8,7 @@ package balios
 
 import "context"
 
-// Cache represents a high-performance in-memory cache interface.
+// Cache represents in-memory cache interface.
 // All methods must be safe for concurrent use.
 type Cache interface {
 	// Get retrieves a value from the cache.

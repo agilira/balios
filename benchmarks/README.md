@@ -153,7 +153,7 @@ benchstat old.txt new.txt
 - Small cache: Edge case
 - Read only: Unrealistic
 
-## 🔧 Customization
+## Customization
 
 Edit constants in `benchmark_test.go`:
 ```go

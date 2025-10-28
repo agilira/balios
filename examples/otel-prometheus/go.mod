@@ -11,8 +11,6 @@ require (
 )
 
 require (
-	github.com/agilira/argus v1.0.7 // indirect
-	github.com/agilira/flash-flags v1.1.5 // indirect
 	github.com/agilira/go-errors v1.1.1 // indirect
 	github.com/agilira/go-timecache v1.0.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -21,7 +19,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
-	github.com/mattn/go-sqlite3 v1.14.32 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.60.0 // indirect

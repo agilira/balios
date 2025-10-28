@@ -1,6 +1,6 @@
 # Fuzz Test Corpus
 
-This directory contains the **fuzz test corpus** for Balios cache library.
+This directory contains the **fuzz test corpus** for Balios.
 
 ## What is a Fuzz Corpus?
 
@@ -95,7 +95,7 @@ cat testdata/fuzz/FuzzStringHash/abc123def456 | od -c
 
 ## Security Note
 
-⚠️ **Some corpus entries may contain attack patterns!**
+**Some corpus entries may contain attack patterns!**
 
 The corpus intentionally includes:
 - Malicious keys designed to cause hash collisions
@@ -118,7 +118,6 @@ When contributing:
 ## References
 
 - [Go Fuzzing Documentation](https://go.dev/security/fuzz/)
-- [Balios Fuzzing Guide](../../docs/FUZZING.md)
 - [Corpus Management Best Practices](https://google.github.io/oss-fuzz/getting-started/new-project-guide/#seed-corpus)
 
 ---

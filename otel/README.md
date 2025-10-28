@@ -1,6 +1,6 @@
 # balios/otel - OpenTelemetry Integration
 
-Professional OpenTelemetry integration for balios cache, enabling enterprise-grade observability with automatic percentile calculation and multi-backend support.
+Professional OpenTelemetry integration for balios cache, enabling production-grade observability with automatic percentile calculation and multi-backend support.
 
 ## Features
 

@@ -170,17 +170,61 @@ Removes all entries and resets statistics.
 cache.Clear()
 ```
 
+#### `ExpireNow() int`
+
+Manually triggers expiration of all TTL-expired entries in the cache.
+
+**Returns:** Number of entries that were expired and removed.
+
+**Behavior:**
+- Scans the entire cache and removes all entries whose TTL has expired
+- Uses lock-free CAS operations for thread-safety
+- Returns immediately if TTL is disabled (TTL=0)
+- Safe to call concurrently with other operations
+- Updates the `Expirations` metric
+
+**Use Cases:**
+- Proactive cleanup before expected traffic spikes
+- Manual cache maintenance in low-traffic periods
+- Integration with cron jobs or scheduled tasks
+- Memory pressure mitigation
+
+**Performance:** O(n) where n is cache capacity. Typical: ~1-5µs per 1000 entries.
+
+**Example:**
+```go
+// Periodic cleanup via ticker
+ticker := time.NewTicker(5 * time.Minute)
+defer ticker.Stop()
+
+for range ticker.C {
+    expired := cache.ExpireNow()
+    if expired > 0 {
+        log.Printf("Expired %d entries", expired)
+    }
+}
+
+// On-demand cleanup
+if memoryPressure() {
+    cache.ExpireNow()
+}
+```
+
+**Note:** Balios also performs **opportunistic inline expiration** during normal operations (Get/Set/Has), so calling `ExpireNow()` manually is optional. It's most useful when you want guaranteed cleanup at specific intervals.
+
 #### `Stats() CacheStats`
 
 Returns current cache statistics.
 
-**Returns:** `CacheStats` with hits, misses, evictions, size, capacity
+**Returns:** `CacheStats` with hits, misses, sets, deletes, evictions, expirations, size, capacity
 
 **Example:**
 ```go
 stats := cache.Stats()
 fmt.Printf("Hit Ratio: %.2f%%, Size: %d/%d\n", 
     stats.HitRatio(), stats.Size, stats.Capacity)
+fmt.Printf("Evictions: %d, Expirations: %d\n",
+    stats.Evictions, stats.Expirations)
 ```
 
 #### `Len() int`
@@ -312,15 +356,27 @@ Validates configuration and sets defaults.
 
 ```go
 type CacheStats struct {
-    Hits      uint64  // Cache hits
-    Misses    uint64  // Cache misses
-    Sets      uint64  // Set operations
-    Deletes   uint64  // Delete operations
-    Evictions uint64  // Evictions
-    Size      int     // Current entries
-    Capacity  int     // Maximum entries
+    Hits        uint64  // Cache hits
+    Misses      uint64  // Cache misses
+    Sets        uint64  // Set operations
+    Deletes     uint64  // Delete operations
+    Evictions   uint64  // Evictions (capacity-based removal)
+    Expirations uint64  // TTL-based expirations
+    Size        int     // Current entries
+    Capacity    int     // Maximum entries
 }
 ```
+
+**Field Descriptions:**
+
+- **Hits**: Number of successful Get() operations
+- **Misses**: Number of Get() operations that didn't find the key
+- **Sets**: Total number of Set() operations
+- **Deletes**: Total number of Delete() operations
+- **Evictions**: Entries removed due to capacity constraints (W-TinyLFU algorithm)
+- **Expirations**: Entries removed due to TTL expiration (inline or via ExpireNow())
+- **Size**: Current number of entries in cache
+- **Capacity**: Maximum number of entries (from Config.MaxSize)
 
 #### `HitRatio() float64`
 

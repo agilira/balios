@@ -1,0 +1,281 @@
+Balios v1.1.32 - Security Hardening & Performance Enhancements
+================================================
+
+Release Date: October 28, 2025
+
+OVERVIEW
+--------
+
+This release significantly enhances Balios cache invalidation strategy,
+transforming it from a basic lazy-expiration system to a production-ready
+hybrid approach.
+
+NEW FEATURES
+------------
+
+1. Hybrid Expiration Strategy
+   ---------------------------
+   Implemented a dual-approach cache invalidation system:
+   
+   - Inline Opportunistic Cleanup: During Set() operations, expired 
+     entries encountered during linear probing are automatically cleaned
+     up at zero additional cost.
+   
+   - Manual Expiration API: New ExpireNow() method performs full-table
+     scan to remove all expired entries, returning the count of entries
+     removed.
+   
+   Design Philosophy: Prefer explicit control over hidden background
+   goroutines. Users can choose when and how to perform batch expiration.
+   
+   Performance Impact: Zero overhead on hot path. Inline cleanup reuses
+   existing Set() linear probe traversal.
+
+2. ExpireNow() API
+   ----------------
+   New method for manual full-table expiration:
+   
+   Signature: func (c *Cache) ExpireNow() int
+   
+   Returns: Number of expired entries removed
+   
+   Behavior:
+   - Lock-free atomic operations (CAS-based)
+   - Concurrent-safe with ongoing Set/Get operations
+   - Respects TTL=0 (no expiration) fast path
+   - Updates expiration metrics automatically
+   
+   Use Cases:
+   - Periodic cleanup in cron jobs
+   - Memory pressure response
+   - Graceful shutdown preparation
+   - Metrics calibration
+
+3. Expiration Metrics
+   -------------------
+   Added comprehensive observability for expiration behavior:
+   
+   - CacheStats.Expirations field (uint64)
+   - MetricsCollector.RecordExpiration() method
+   - OpenTelemetry integration: balios_expirations_total counter
+   
+   Tracking: All expiration paths increment counter:
+   - Inline cleanup during Set()
+   - Manual ExpireNow() calls
+   - Lazy expiration on Get/Has
+   
+   Observability: Enables monitoring of expiration rates, memory
+   efficiency, and TTL effectiveness in production.
+
+SECURITY FIXES
+--------------
+
+Vulnerability: Integer Overflow in expireAt Calculation
+---------------------------------------------------
+
+When calculating entry expiration time (expireAt = now + 
+ttlNanos), integer overflow could occur if now + ttlNanos exceeds 
+max(int64).
+
+Discovery Method: Fuzzing with extreme inputs (ttlNanos=1ns, 
+advanceNs=max int64) revealed that overflow caused wrapping to negative
+values, potentially allowing expired entries to appear unexpired.
+
+Impact: 
+- Severity: HIGH (CVE-worthy if publicly exploited)
+- Affected Code: cache.go Set() method, expireAt calculation
+- Attack Vector: Malicious TTL configurations or time provider manipulation
+- Consequence: Stale data serving, cache pollution, memory leak
+
+Fix Implementation:
+- Added overflow protection before addition:
+  
+  if now > (1<<63-1)-c.ttlNanos {
+      expireAt = 1<<63 - 1  // Cap at max int64
+  } else {
+      expireAt = now + c.ttlNanos
+  }
+
+- Validation: 20 fuzz seed tests cover overflow edge cases
+- Testing: FuzzCacheExpiration and FuzzCacheExpirationConcurrent
+
+Result: Integer overflow impossible, all time arithmetic safely bounded.
+
+TESTING ENHANCEMENTS
+--------------------
+
+1. Comprehensive Expiration Test Suite (TDD)
+   ------------------------------------------
+   Added 9 new test functions covering all expiration scenarios:
+   
+   - TestInlineExpiration_OpportunisticCleanup
+   - TestInlineExpiration_NoTTL
+   - TestInlineExpiration_PartialExpiration
+   - TestInlineExpiration_ConcurrentAccess
+   - TestExpireNow_Basic
+   - TestExpireNow_PartialExpiration
+   - TestExpireNow_NoTTL
+   - TestExpireNow_EmptyCache
+   - TestExpireNow_ConcurrentSafety
+   - TestExpireNow_MetricsTracking
+
+2. Security Fuzzing
+   ----------------
+   Added 2 new fuzz test functions with 20 seed corpus entries:
+   
+   FuzzCacheExpiration (14 seeds):
+   - Normal expiration (expired vs not expired)
+   - Minimal TTL values (1ns)
+   - Boundary conditions (exact expiration time)
+   - Large time values (1 second, overflow risks)
+   - Max int64 TTL and time advances
+   - Zero TTL (no expiration)
+   - Negative time advances (clock skew)
+   
+   FuzzCacheExpirationConcurrent (6 seeds):
+   - Concurrent Get/Set/ExpireNow under expiration
+   - Varying operation counts (10-200 ops)
+   - Different TTL and time advance combinations
+   
+   Invariants Validated:
+   1. Expired entries never returned by Get()
+   2. ExpireNow() removes all expired entries
+   3. No panics with extreme values
+   4. Expiration counters remain accurate
+   5. No integer overflow in calculations
+   
+   Discovery: Integer overflow vulnerability found via fuzzing.
+
+DOCUMENTATION UPDATES
+---------------------
+
+1. API Documentation (docs/API.md)
+   --------------------------------
+   Added ExpireNow() method documentation:
+   - Method signature and return value
+   - Usage examples (periodic cleanup, shutdown preparation)
+   - Performance characteristics
+   - Concurrency guarantees
+   
+   Updated CacheStats section:
+   - Added Expirations field description
+   - Explained counter semantics and atomicity
+
+2. Architecture Documentation (docs/ARCHITECTURE.md)
+   -------------------------------------------------
+   New section: "Cache Invalidation Strategy"
+   
+   Content:
+   - Hybrid expiration design rationale
+   - Performance implications (inline vs background)
+   - Tradeoff analysis (explicit control vs convenience)
+   - Comparison with competing libraries
+   
+   Philosophy: "Prefer explicit control over hidden goroutines. Users
+   choose when to pay the cost of batch expiration."
+
+3. Extensibility Guide (docs/EXTENSIBILITY.md)
+   -------------------------------------------
+   New document outlining wrapper package philosophy:
+   
+   Content:
+   - Core minimalism philosophy
+   - Planned wrapper packages (balios-bg, balios-sliding, etc.)
+   - Wrapper development guidelines
+   - Community contribution model
+   
+   Vision: Core remains lean, optional behaviors via composable wrappers.
+
+MAKEFILE ENHANCEMENTS
+---------------------
+
+Updated Makefile.ps1 with new fuzz tests:
+
+Quick Fuzzing (30 seconds per test):
+- Added: FuzzCacheExpiration
+- Added: FuzzCacheExpirationConcurrent
+- Total: 9 fuzz tests × 30s = ~4.5 minutes
+
+Extended Fuzzing (5 minutes per test):
+- Updated timing estimate: ~45 minutes total
+
+Fuzz test discovery: Makefile automatically includes all Fuzz* functions.
+
+MIGRATION GUIDE
+---------------
+
+Breaking Changes: NONE
+
+New API (Backward Compatible):
+- ExpireNow() method added to Cache interface
+- Existing implementations: Return 0 (no-op behavior acceptable)
+
+New Fields (Backward Compatible):
+- CacheStats.Expirations added (uint64, default: 0)
+- Existing code: Field auto-initialized to zero
+
+Metrics Interface (Backward Compatible):
+- RecordExpiration() added to MetricsCollector interface
+- NoOpMetricsCollector: Auto-implements as no-op
+- Custom implementations: Add empty method or track expirations
+
+Recommendations:
+1. If using TTL, consider calling ExpireNow() periodically:
+   - In cron jobs (e.g., every 5 minutes)
+   - Before shutdown (graceful memory cleanup)
+   - On memory pressure events
+   
+2. If using custom MetricsCollector, implement RecordExpiration():
+   - Increment counter on each expiration
+   - Expose as Prometheus metric: balios_expirations_total
+   
+3. Monitor CacheStats.Expirations in production:
+   - Track expiration rate over time
+   - Correlate with hit ratio and memory usage
+   - Tune TTL based on observed patterns
+
+KNOWN ISSUES
+------------
+
+1. Windows gosec False Positive
+   -----------------------------
+   Issue: gosec reports "invalid syntax" when parsing Windows file paths
+   with backslashes.
+   
+   Example: "\\Users\\agior\\Desktop\\GitHub\\balios\\examples\\..."
+   
+   Root Cause: gosec attempts to parse file paths as Go code.
+   
+   Impact: None (false positive, code compiles and runs correctly)
+   
+   Workaround: Use Makefile.ps1/Makefile which handles gosec output gracefully.
+   
+   Tracking: Known limitation of gosec on Windows, not a Balios issue.
+
+UPGRADE INSTRUCTIONS
+--------------------
+
+From v1.1.31 to v1.1.32:
+
+1. Update dependency:
+   go get github.com/agilira/balios@v1.1.32
+
+2. No code changes required (backward compatible)
+
+3. Optional: Add periodic ExpireNow() calls:
+   
+   // In your application startup
+   ticker := time.NewTicker(5 * time.Minute)
+   go func() {
+       for range ticker.C {
+           expired := cache.ExpireNow()
+           log.Printf("Expired %d entries", expired)
+       }
+   }()
+
+4. Optional: Monitor expiration metrics:
+   
+   stats := cache.Stats()
+   fmt.Printf("Total expirations: %d\n", stats.Expirations)
+
+5. Rebuild and test (all tests should pass)

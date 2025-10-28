@@ -34,20 +34,20 @@ coverage: ## Run tests with coverage
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)Coverage report generated: coverage.html$(NC)"
 
-fuzz: ## Run fuzz tests (quick - 30 seconds each, ~3.5 min total)
+fuzz: ## Run fuzz tests (quick - 30 seconds each, ~4.5 min total)
 	@echo "$(YELLOW)Running fuzz tests (quick - 30 seconds each)...$(NC)"
-	@echo "$(BLUE)Quick feedback loop for development. Total time: ~3.5 minutes$(NC)"
-	@for test in FuzzStringHash FuzzCacheSetGet FuzzCacheConcurrentOperations FuzzGetOrLoad FuzzGetOrLoadWithContext FuzzCacheConfig FuzzCacheMemorySafety; do \
+	@echo "$(BLUE)Quick feedback loop for development. Total time: ~4.5 minutes$(NC)"
+	@for test in FuzzStringHash FuzzCacheSetGet FuzzCacheConcurrentOperations FuzzGetOrLoad FuzzGetOrLoadWithContext FuzzCacheConfig FuzzCacheMemorySafety FuzzCacheExpiration FuzzCacheExpirationConcurrent; do \
 		echo "$(YELLOW)Running $$test...$(NC)"; \
 		go test -fuzz=$$test -fuzztime=30s || exit 1; \
 		echo "$(GREEN)✓ $$test passed$(NC)"; \
 	done
 	@echo "$(GREEN)All fuzz tests completed successfully!$(NC)"
 
-fuzz-extended: ## Run fuzz tests (extended - 5 minutes each, ~35 min total)
+fuzz-extended: ## Run fuzz tests (extended - 5 minutes each, ~45 min total)
 	@echo "$(YELLOW)Running fuzz tests (extended - 5 minutes each)...$(NC)"
-	@echo "$(BLUE)Recommended for pre-commit or PR checks. Total time: ~35 minutes$(NC)"
-	@for test in FuzzStringHash FuzzCacheSetGet FuzzCacheConcurrentOperations FuzzGetOrLoad FuzzGetOrLoadWithContext FuzzCacheConfig FuzzCacheMemorySafety; do \
+	@echo "$(BLUE)Recommended for pre-commit or PR checks. Total time: ~45 minutes$(NC)"
+	@for test in FuzzStringHash FuzzCacheSetGet FuzzCacheConcurrentOperations FuzzGetOrLoad FuzzGetOrLoadWithContext FuzzCacheConfig FuzzCacheMemorySafety FuzzCacheExpiration FuzzCacheExpirationConcurrent; do \
 		echo "$(YELLOW)Running $$test (5 minutes)...$(NC)"; \
 		go test -fuzz=$$test -fuzztime=5m || exit 1; \
 		echo "$(GREEN)✓ $$test passed$(NC)"; \

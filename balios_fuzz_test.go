@@ -957,3 +957,265 @@ func TestFuzzPerformanceInvariants(t *testing.T) {
 		}
 	})
 }
+
+// =============================================================================
+// TTL EXPIRATION FUZZING
+// =============================================================================
+
+// FuzzCacheExpiration performs fuzz testing on TTL expiration logic.
+//
+// SECURITY CRITICAL: TTL expiration must be reliable and not exploitable.
+// Incorrect expiration could lead to:
+// - Stale data serving (security vulnerability)
+// - Memory leaks (resource exhaustion)
+// - Integer overflow in time calculations (undefined behavior)
+// - Race conditions in concurrent expiration checks
+//
+// ATTACK VECTORS:
+// - Extreme TTL values (overflow, underflow)
+// - Time provider manipulation (clock skew)
+// - Concurrent access during expiration
+// - Zero/negative TTL edge cases
+//
+// INVARIANTS:
+// 1. Expired entries must never be returned by Get()
+// 2. ExpireNow() must remove all expired entries
+// 3. No panics regardless of TTL value or time progression
+// 4. Expiration counters must be accurate
+// 5. No integer overflow in expireAt calculations
+func FuzzCacheExpiration(f *testing.F) {
+	// Seed corpus with interesting TTL values
+	seeds := []struct {
+		ttlNanos  int64
+		advanceNs int64
+	}{
+		{100, 150},                   // Normal: expired
+		{100, 50},                    // Normal: not expired
+		{1, 2},                       // Minimal TTL
+		{1000000000, 999999999},      // 1 second, just under
+		{1000000000, 1000000001},     // 1 second, just over
+		{9223372036854775807, 1},     // Max int64 TTL
+		{1, 9223372036854775807},     // Huge time advance
+		{100, 0},                     // No time advance
+		{0, 100},                     // Zero TTL (no expiration)
+		{1000000, -500},              // Negative advance (clock skew)
+		{100000000000, 100000000001}, // Large values
+		{10, 10},                     // Exact expiration boundary
+		{50, 49},                     // Just before expiration
+		{50, 51},                     // Just after expiration
+	}
+
+	for _, seed := range seeds {
+		f.Add(seed.ttlNanos, seed.advanceNs)
+	}
+
+	f.Fuzz(func(t *testing.T, ttlNanos int64, advanceNs int64) {
+		// Skip invalid TTL values (< 0)
+		if ttlNanos < 0 {
+			return
+		}
+
+		// Skip unrealistic time advances that would cause overflow issues
+		// in test infrastructure (max 100 years = ~3e18 nanoseconds)
+		const maxRealisticAdvance = 3e18
+		if advanceNs > maxRealisticAdvance || advanceNs < -maxRealisticAdvance {
+			return // Skip extreme values that break test infrastructure
+		}
+
+		// Create mock time provider for deterministic testing
+		mockTime := &MockTimeProvider{currentTime: 1000000000}
+
+		// Create cache with fuzzed TTL
+		cache := NewCache(Config{
+			MaxSize:      100,
+			TTL:          time.Duration(ttlNanos),
+			TimeProvider: mockTime,
+		})
+		defer func() {
+			if err := cache.Close(); err != nil {
+				t.Errorf("Close failed: %v", err)
+			}
+		}()
+
+		// PROPERTY 1: No panics during normal operations
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("PANIC: %v (ttl=%d, advance=%d)", r, ttlNanos, advanceNs)
+			}
+		}()
+
+		// Set a value
+		key := "fuzz_key"
+		cache.Set(key, "value")
+
+		// PROPERTY 2: Value accessible immediately after Set
+		if _, found := cache.Get(key); !found {
+			t.Error("Value not found immediately after Set")
+		}
+
+		// Advance time
+		if advanceNs != 0 {
+			// Protect against negative advance causing underflow
+			if advanceNs < 0 {
+				// Simulate clock skew backward - should not cause issues
+				if mockTime.currentTime > -advanceNs {
+					mockTime.currentTime += advanceNs
+				}
+			} else {
+				// Protect against overflow
+				if mockTime.currentTime <= 9223372036854775807-advanceNs {
+					mockTime.Advance(time.Duration(advanceNs))
+				}
+			}
+		}
+
+		// Determine if entry should be expired
+		shouldExpire := ttlNanos > 0 && advanceNs > ttlNanos
+
+		// PROPERTY 3: Get() respects expiration
+		_, found := cache.Get(key)
+		if shouldExpire && found {
+			t.Errorf("SECURITY VIOLATION: Expired entry returned (ttl=%d, advance=%d)", ttlNanos, advanceNs)
+		}
+		if !shouldExpire && ttlNanos > 0 && !found && advanceNs >= 0 {
+			// Entry should still be valid
+			// Only check if advance is non-negative (no clock skew backward)
+			if advanceNs < ttlNanos {
+				t.Errorf("Valid entry not found (ttl=%d, advance=%d)", ttlNanos, advanceNs)
+			}
+		}
+
+		// PROPERTY 4: ExpireNow() doesn't panic
+		expired := cache.ExpireNow()
+		if expired < 0 {
+			t.Errorf("ExpireNow() returned negative count: %d", expired)
+		}
+
+		// PROPERTY 5: Stats are consistent
+		stats := cache.Stats()
+		if stats.Size < 0 {
+			t.Errorf("Negative cache size: %d", stats.Size)
+		}
+		// Note: Expirations is uint64, can't be negative - no check needed
+
+		// PROPERTY 6: After ExpireNow(), no expired entries remain
+		if shouldExpire {
+			if _, found := cache.Get(key); found {
+				t.Error("Expired entry still accessible after ExpireNow()")
+			}
+		}
+	})
+}
+
+// FuzzCacheExpirationConcurrent tests concurrent expiration under fuzzed conditions.
+//
+// SECURITY CRITICAL: Concurrent expiration must be race-free and consistent.
+// Race conditions could lead to:
+// - Serving expired data (security violation)
+// - Double-free or use-after-free (memory corruption)
+// - Counter inconsistencies (monitoring blind spots)
+//
+// ATTACK VECTORS:
+// - Concurrent Get/Set/ExpireNow during expiration
+// - Time provider changes during access
+// - Race between expiration check and value read
+//
+// INVARIANTS:
+// 1. No data races (verified by race detector)
+// 2. Expired entries never returned during concurrent access
+// 3. Expiration counters remain consistent
+// 4. No crashes or panics under load
+func FuzzCacheExpirationConcurrent(f *testing.F) {
+	// Seed corpus
+	seeds := []struct {
+		ttlMs     int64
+		advanceMs int64
+		numOps    int
+	}{
+		{100, 150, 50},  // Expired, moderate ops
+		{100, 50, 50},   // Not expired, moderate ops
+		{10, 20, 100},   // Fast expiration, many ops
+		{1000, 500, 10}, // Slow expiration, few ops
+		{50, 60, 200},   // Boundary, heavy ops
+		{100, 100, 100}, // Exact boundary
+	}
+
+	for _, seed := range seeds {
+		f.Add(seed.ttlMs, seed.advanceMs, seed.numOps)
+	}
+
+	f.Fuzz(func(t *testing.T, ttlMs int64, advanceMs int64, numOps int) {
+		// Constrain inputs to reasonable ranges
+		if ttlMs < 1 || ttlMs > 10000 {
+			return // Skip unreasonable TTLs
+		}
+		if advanceMs < 0 || advanceMs > 20000 {
+			return // Skip unreasonable time advances
+		}
+		if numOps < 1 || numOps > 500 {
+			return // Skip unreasonable operation counts
+		}
+
+		mockTime := &MockTimeProvider{currentTime: 1000000000}
+
+		cache := NewCache(Config{
+			MaxSize:      100,
+			TTL:          time.Duration(ttlMs) * time.Millisecond,
+			TimeProvider: mockTime,
+		})
+		defer func() {
+			if err := cache.Close(); err != nil {
+				t.Errorf("Close failed: %v", err)
+			}
+		}()
+
+		// PROPERTY 1: No panics under concurrent load
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("PANIC during concurrent expiration: %v", r)
+			}
+		}()
+
+		// Populate cache
+		for i := 0; i < 20; i++ {
+			cache.Set(fmt.Sprintf("key_%d", i), i)
+		}
+
+		// Advance time to trigger expiration
+		mockTime.Advance(time.Duration(advanceMs) * time.Millisecond)
+
+		// Concurrent operations
+		var wg sync.WaitGroup
+		for i := 0; i < numOps; i++ {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				switch idx % 4 {
+				case 0:
+					cache.Get(fmt.Sprintf("key_%d", idx%20))
+				case 1:
+					cache.Set(fmt.Sprintf("key_%d", idx%20), idx)
+				case 2:
+					cache.ExpireNow()
+				case 3:
+					cache.Has(fmt.Sprintf("key_%d", idx%20))
+				}
+			}(i)
+		}
+
+		wg.Wait()
+
+		// PROPERTY 2: Cache remains consistent after concurrent operations
+		stats := cache.Stats()
+		if stats.Size < 0 {
+			t.Errorf("INCONSISTENCY: Negative cache size after concurrent ops: %d", stats.Size)
+		}
+		// Note: Expirations is uint64, can't be negative - no check needed
+
+		// PROPERTY 3: ExpireNow() completes successfully after concurrent load
+		finalExpired := cache.ExpireNow()
+		if finalExpired < 0 {
+			t.Errorf("ExpireNow() returned negative count after concurrent ops: %d", finalExpired)
+		}
+	})
+}

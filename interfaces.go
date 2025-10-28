@@ -60,6 +60,25 @@ type Cache interface {
 	// The context is passed to the loader function for cancellation control.
 	GetOrLoadWithContext(ctx context.Context, key string, loader func(context.Context) (interface{}, error)) (interface{}, error)
 
+	// ExpireNow manually expires all entries that have exceeded their TTL.
+	// This method scans the entire cache and removes expired entries immediately.
+	// Returns the number of entries that were expired and removed.
+	//
+	// Use cases:
+	//   - Periodic cleanup via external scheduler (cron, ticker)
+	//   - Pre-shutdown cleanup to free resources
+	//   - Testing and debugging expiration behavior
+	//
+	// Performance:
+	//   - O(n) where n is the number of entries in the cache
+	//   - Lock-free with CAS operations for thread safety
+	//   - Safe to call concurrently with other cache operations
+	//   - Returns 0 immediately if TTL is not configured
+	//
+	// Returns:
+	//   - Number of expired entries removed from the cache
+	ExpireNow() int
+
 	// Close gracefully shuts down the cache and releases resources.
 	Close() error
 }
@@ -80,6 +99,9 @@ type CacheStats struct {
 
 	// Evictions is the number of items evicted from the cache
 	Evictions uint64
+
+	// Expirations is the number of items expired due to TTL
+	Expirations uint64
 
 	// Size is the current number of items in the cache
 	Size int
@@ -167,6 +189,10 @@ type MetricsCollector interface {
 	// RecordEviction records a cache eviction event.
 	// Called when an entry is evicted due to cache being full.
 	RecordEviction()
+
+	// RecordExpiration records a cache expiration event.
+	// Called when an entry is expired due to TTL.
+	RecordExpiration()
 }
 
 // NoOpMetricsCollector is a metrics collector that does nothing.
@@ -185,3 +211,6 @@ func (NoOpMetricsCollector) RecordDelete(latencyNs int64) {}
 
 // RecordEviction does nothing. Inlined by compiler.
 func (NoOpMetricsCollector) RecordEviction() {}
+
+// RecordExpiration does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordExpiration() {}

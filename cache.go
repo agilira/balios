@@ -61,12 +61,13 @@ type wtinyLFUCache struct {
 	negativeCache sync.Map
 
 	// Atomic statistics counters
-	hits      int64
-	misses    int64
-	sets      int64
-	deletes   int64
-	evictions int64
-	size      int64
+	hits        int64
+	misses      int64
+	sets        int64
+	deletes     int64
+	evictions   int64
+	expirations int64
+	size        int64
 }
 
 // negativeEntry represents a cached error from GetOrLoad
@@ -227,6 +228,23 @@ func NewCache(config Config) Cache {
 	return cache
 }
 
+// isExpired checks if an entry has expired based on current time and TTL configuration.
+// Returns true if entry is expired, false otherwise.
+// This helper ensures DRY principle and consistent expiration logic.
+//
+// Performance: ~2ns (single atomic load + comparison)
+// Zero overhead when TTL is disabled (c.ttlNanos == 0).
+func (c *wtinyLFUCache) isExpired(entry *entry, now int64) bool {
+	// Fast path: if TTL is disabled, nothing can expire
+	if c.ttlNanos == 0 {
+		return false
+	}
+
+	// Check if entry has expiration set and if it's past the deadline
+	expireAt := atomic.LoadInt64(&entry.expireAt)
+	return expireAt > 0 && now > expireAt
+}
+
 // fastRand generates a pseudo-random uint64 using xorshift64 algorithm.
 // This is a lock-free, thread-safe RNG optimized for cache eviction sampling.
 // Performance: ~2ns per call with no allocations.
@@ -294,7 +312,13 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 	// Calculate expiration time if TTL is set
 	var expireAt int64
 	if c.ttlNanos > 0 && now > 0 {
-		expireAt = now + c.ttlNanos
+		// Protect against integer overflow: if now + ttlNanos would overflow,
+		// set expireAt to max int64 (effectively never expires in practice)
+		if now > (1<<63-1)-c.ttlNanos {
+			expireAt = 1<<63 - 1 // max int64
+		} else {
+			expireAt = now + c.ttlNanos
+		}
 	}
 
 	// Find slot using linear probing
@@ -316,6 +340,25 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		// Skip entries being written/updated by other threads
 		if state == entryPending {
 			continue
+		}
+
+		// OPPORTUNISTIC CLEANUP: If we encounter an expired entry during probing,
+		// clean it up immediately. This improves cache efficiency without extra goroutines.
+		// Zero overhead when TTL=0 (isExpired returns false immediately).
+		if state == entryValid && c.isExpired(entry, now) {
+			// Try to mark as deleted - if successful, we've cleaned up a slot
+			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
+				entry.storeKey("")
+				atomic.AddInt64(&c.size, -1)
+				atomic.AddInt64(&c.expirations, 1)
+				// Record expiration metrics
+				if c.metricsCollector != nil {
+					c.metricsCollector.RecordExpiration()
+				}
+				// Now this slot can be reused as entryDeleted
+				state = entryDeleted
+			}
+			// If CAS failed, another goroutine is handling it - continue probing
 		}
 
 		if state == entryEmpty || state == entryDeleted {
@@ -449,22 +492,26 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 			}
 
 			if storedKey := entry.loadKey(); storedKey == key {
-				// Check if entry has expired
-				if c.ttlNanos > 0 {
-					expireAt := atomic.LoadInt64(&entry.expireAt)
-					if expireAt > 0 && now > expireAt {
-						// Entry expired - mark as deleted asynchronously
-						// We don't wait for the CAS to succeed, just try once
-						atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted)
-						atomic.AddInt64(&c.misses, 1)
-
-						// Record miss metrics
+				// Check if entry has expired using DRY helper
+				if c.isExpired(entry, now) {
+					// Entry expired - mark as deleted asynchronously
+					// We don't wait for the CAS to succeed, just try once
+					if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
+						atomic.AddInt64(&c.size, -1)
+						atomic.AddInt64(&c.expirations, 1)
+						// Record expiration metrics
 						if c.metricsCollector != nil {
-							latency := c.timeProvider.Now() - now
-							c.metricsCollector.RecordGet(latency, false)
+							c.metricsCollector.RecordExpiration()
 						}
-						return nil, false
 					}
+					atomic.AddInt64(&c.misses, 1)
+
+					// Record miss metrics
+					if c.metricsCollector != nil {
+						latency := c.timeProvider.Now() - now
+						c.metricsCollector.RecordGet(latency, false)
+					}
+					return nil, false
 				}
 
 				// Read value atomically
@@ -596,13 +643,17 @@ func (c *wtinyLFUCache) Has(key string) bool {
 
 			if storedKey := entry.loadKey(); storedKey == key {
 				// Check if entry has expired (consistent with Get behavior)
-				if c.ttlNanos > 0 {
-					expireAt := atomic.LoadInt64(&entry.expireAt)
-					if expireAt > 0 && now > expireAt {
-						// Entry expired - mark as deleted asynchronously
-						atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted)
-						return false
+				if c.isExpired(entry, now) {
+					// Entry expired - mark as deleted asynchronously
+					if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
+						atomic.AddInt64(&c.size, -1)
+						atomic.AddInt64(&c.expirations, 1)
+						// Record expiration metrics
+						if c.metricsCollector != nil {
+							c.metricsCollector.RecordExpiration()
+						}
 					}
+					return false
 				}
 				return true
 			}
@@ -640,6 +691,7 @@ func (c *wtinyLFUCache) Clear() {
 	atomic.StoreInt64(&c.sets, 0)
 	atomic.StoreInt64(&c.deletes, 0)
 	atomic.StoreInt64(&c.evictions, 0)
+	atomic.StoreInt64(&c.expirations, 0)
 
 	// Reset frequency sketch
 	c.sketch.reset()
@@ -648,14 +700,80 @@ func (c *wtinyLFUCache) Clear() {
 // Stats returns cache statistics.
 func (c *wtinyLFUCache) Stats() CacheStats {
 	return CacheStats{
-		Hits:      uint64(atomic.LoadInt64(&c.hits)),      // #nosec G115 - stats counters are always positive
-		Misses:    uint64(atomic.LoadInt64(&c.misses)),    // #nosec G115 - stats counters are always positive
-		Sets:      uint64(atomic.LoadInt64(&c.sets)),      // #nosec G115 - stats counters are always positive
-		Deletes:   uint64(atomic.LoadInt64(&c.deletes)),   // #nosec G115 - stats counters are always positive
-		Evictions: uint64(atomic.LoadInt64(&c.evictions)), // #nosec G115 - stats counters are always positive
-		Size:      int(atomic.LoadInt64(&c.size)),
-		Capacity:  int(c.maxSize),
+		Hits:        uint64(atomic.LoadInt64(&c.hits)),        // #nosec G115 - stats counters are always positive
+		Misses:      uint64(atomic.LoadInt64(&c.misses)),      // #nosec G115 - stats counters are always positive
+		Sets:        uint64(atomic.LoadInt64(&c.sets)),        // #nosec G115 - stats counters are always positive
+		Deletes:     uint64(atomic.LoadInt64(&c.deletes)),     // #nosec G115 - stats counters are always positive
+		Evictions:   uint64(atomic.LoadInt64(&c.evictions)),   // #nosec G115 - stats counters are always positive
+		Expirations: uint64(atomic.LoadInt64(&c.expirations)), // #nosec G115 - stats counters are always positive
+		Size:        int(atomic.LoadInt64(&c.size)),
+		Capacity:    int(c.maxSize),
 	}
+}
+
+// ExpireNow manually expires all entries that have exceeded their TTL.
+// Scans the entire cache and removes expired entries using lock-free CAS operations.
+//
+// Returns the number of entries that were expired and removed.
+//
+// Performance characteristics:
+//   - O(n) where n is cache capacity (not size)
+//   - Lock-free with atomic CAS operations
+//   - Safe for concurrent use with other operations
+//   - Returns 0 immediately if TTL is not configured (zero overhead)
+//
+// Use cases:
+//   - Periodic cleanup via external ticker
+//   - Pre-shutdown cleanup to free resources
+//   - Testing and debugging
+//
+// Thread-safety:
+//   - Multiple concurrent ExpireNow() calls are safe
+//   - Concurrent Set/Get/Delete operations remain safe
+//   - Uses CAS to prevent double-counting of expired entries
+func (c *wtinyLFUCache) ExpireNow() int {
+	// Fast path: if TTL is disabled, nothing to expire
+	if c.ttlNanos == 0 {
+		return 0
+	}
+
+	// Get current time once for consistency
+	now := c.timeProvider.Now()
+	expiredCount := 0
+
+	// Scan entire table
+	for i := range c.entries {
+		entry := &c.entries[i]
+
+		// Load entry state atomically
+		state := atomic.LoadInt32(&entry.valid)
+
+		// Skip empty, deleted, or pending entries
+		if state != entryValid {
+			continue
+		}
+
+		// Check if entry is expired
+		if c.isExpired(entry, now) {
+			// Try to mark as deleted atomically
+			// CAS ensures we only count each expiration once even with concurrent ExpireNow calls
+			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
+				// Successfully expired this entry
+				entry.storeKey("")
+				// Note: atomic.Value will be reset when entry is reused via populateEntry
+				atomic.AddInt64(&c.size, -1)
+				atomic.AddInt64(&c.expirations, 1)
+				expiredCount++
+
+				// Record expiration metrics
+				if c.metricsCollector != nil {
+					c.metricsCollector.RecordExpiration()
+				}
+			}
+		}
+	}
+
+	return expiredCount
 }
 
 // Close gracefully shuts down the cache.

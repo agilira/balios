@@ -229,7 +229,7 @@ function Invoke-Bench {
 
 function Invoke-Fuzz {
     Write-ColorOutput "Running fuzz tests (quick - 30 seconds each)..." $Yellow
-    Write-ColorOutput "Quick feedback loop for development. Total time: ~3.5 minutes" $Blue
+    Write-ColorOutput "Quick feedback loop for development. Total time: ~4.5 minutes" $Blue
     
     $fuzzTests = @(
         "FuzzStringHash",
@@ -238,7 +238,9 @@ function Invoke-Fuzz {
         "FuzzGetOrLoad",
         "FuzzGetOrLoadWithContext",
         "FuzzCacheConfig",
-        "FuzzCacheMemorySafety"
+        "FuzzCacheMemorySafety",
+        "FuzzCacheExpiration",
+        "FuzzCacheExpirationConcurrent"
     )
     
     foreach ($test in $fuzzTests) {
@@ -256,7 +258,7 @@ function Invoke-Fuzz {
 
 function Invoke-FuzzExtended {
     Write-ColorOutput "Running fuzz tests (extended - 5 minutes each)..." $Yellow
-    Write-ColorOutput "Recommended for pre-commit or PR checks. Total time: ~35 minutes" $Blue
+    Write-ColorOutput "Recommended for pre-commit or PR checks. Total time: ~45 minutes" $Blue
     
     $fuzzTests = @(
         "FuzzStringHash",
@@ -265,7 +267,9 @@ function Invoke-FuzzExtended {
         "FuzzGetOrLoad",
         "FuzzGetOrLoadWithContext",
         "FuzzCacheConfig",
-        "FuzzCacheMemorySafety"
+        "FuzzCacheMemorySafety",
+        "FuzzCacheExpiration",
+        "FuzzCacheExpirationConcurrent"
     )
     
     foreach ($test in $fuzzTests) {

@@ -43,6 +43,7 @@
 //   - balios_get_hits_total: Counter of cache hits
 //   - balios_get_misses_total: Counter of cache misses
 //   - balios_evictions_total: Counter of evictions
+//   - balios_expirations_total: Counter of TTL-based expirations
 //
 // All metrics are automatically aggregated by the OTEL SDK and can be exported to
 // any OTEL-compatible backend. Histograms automatically calculate percentiles (p50, p95, p99).
@@ -74,6 +75,7 @@ type OTelMetricsCollector struct {
 	hits          metric.Int64Counter   // Cache hits counter
 	misses        metric.Int64Counter   // Cache misses counter
 	evictions     metric.Int64Counter   // Evictions counter
+	expirations   metric.Int64Counter   // Expirations counter
 }
 
 // Options for configuring OTelMetricsCollector.
@@ -196,6 +198,15 @@ func NewOTelMetricsCollector(provider metric.MeterProvider, opts ...Option) (*OT
 		return nil, err
 	}
 
+	// Create expirations counter
+	collector.expirations, err = meter.Int64Counter(
+		"balios_expirations_total",
+		metric.WithDescription("Total number of TTL-based expirations"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return collector, nil
 }
 
@@ -259,6 +270,16 @@ func (c *OTelMetricsCollector) RecordDelete(latencyNs int64) {
 // Performance: ~50-100ns overhead, allocation-free.
 func (c *OTelMetricsCollector) RecordEviction() {
 	c.evictions.Add(context.Background(), 1)
+}
+
+// RecordExpiration records a TTL-based expiration event.
+//
+// This method increments the expirations counter.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~50-100ns overhead, allocation-free.
+func (c *OTelMetricsCollector) RecordExpiration() {
+	c.expirations.Add(context.Background(), 1)
 }
 
 // Compile-time interface check

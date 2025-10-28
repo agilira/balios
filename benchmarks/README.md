@@ -1,6 +1,6 @@
 # Balios Benchmarking Framework
 
-Comprehensive benchmark suite comparing Balios against the best Go caches: **Otter** and **Ristretto**.
+Comprehensive benchmark suite comparing Balios alongside the best Go caches: **Otter** and **Ristretto**.
 
 ## Benchmark Categories
 

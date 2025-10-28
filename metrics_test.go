@@ -7,6 +7,7 @@
 package balios
 
 import (
+	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -102,6 +103,13 @@ func (m *mockMetricsCollector) RecordEviction() {
 	defer m.mu.Unlock()
 
 	m.evictionCalls++
+}
+
+func (m *mockMetricsCollector) RecordExpiration() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Track expirations if needed for testing
 }
 
 // TestMockMetricsCollector verifies our test implementation works correctly
@@ -246,45 +254,66 @@ func TestCacheMetrics_ZeroOverhead(t *testing.T) {
 		cache2.Set(key, i)
 	}
 
-	// Benchmark Get operations
-	iterations := 10000
+	// Use higher iteration count and multiple samples to reduce statistical noise
+	// This makes the test more reliable on systems under load
+	const iterations = 100000
+	const samples = 5
 
-	start1 := time.Now()
-	for i := 0; i < iterations; i++ {
-		key := string(rune('a' + i%26))
+	// Warmup phase to eliminate JIT/allocation effects
+	for warmup := 0; warmup < 1000; warmup++ {
+		key := string(rune('a' + warmup%26))
 		cache1.Get(key)
-	}
-	duration1 := time.Since(start1)
-
-	start2 := time.Now()
-	for i := 0; i < iterations; i++ {
-		key := string(rune('a' + i%26))
 		cache2.Get(key)
 	}
-	duration2 := time.Since(start2)
 
-	t.Logf("Without metrics: %v", duration1)
-	t.Logf("With NoOp metrics: %v", duration2)
+	// Collect multiple samples and use median to filter outliers
+	durations1 := make([]time.Duration, samples)
+	durations2 := make([]time.Duration, samples)
 
-	// If duration1 is too small, the test is too fast to measure overhead accurately
-	// This is actually a good thing - it means operations are extremely fast
-	if duration1 < time.Microsecond {
-		t.Logf("INFO: Operations too fast to measure overhead (<1µs), skipping overhead check")
-		t.Logf("This indicates excellent performance - both caches complete in < %v", time.Microsecond)
+	for sample := 0; sample < samples; sample++ {
+		// Measure cache without metrics
+		start1 := time.Now()
+		for i := 0; i < iterations; i++ {
+			key := string(rune('a' + i%26))
+			cache1.Get(key)
+		}
+		durations1[sample] = time.Since(start1)
+
+		// Measure cache with NoOp metrics
+		start2 := time.Now()
+		for i := 0; i < iterations; i++ {
+			key := string(rune('a' + i%26))
+			cache2.Get(key)
+		}
+		durations2[sample] = time.Since(start2)
+	}
+
+	// Calculate median (more robust than mean for noisy measurements)
+	median1 := medianDuration(durations1)
+	median2 := medianDuration(durations2)
+
+	t.Logf("Without metrics (median of %d samples): %v", samples, median1)
+	t.Logf("With NoOp metrics (median of %d samples): %v", samples, median2)
+
+	// If median1 is too small, the test is too fast to measure overhead accurately
+	if median1 < 10*time.Microsecond {
+		t.Logf("INFO: Operations too fast to measure overhead (<10µs for %d ops), skipping overhead check", iterations)
+		t.Logf("This indicates excellent performance - operations complete in < %v per op", median1/iterations)
 		return
 	}
 
 	// NoOpMetricsCollector should have negligible overhead
-	overhead := float64(duration2-duration1) / float64(duration1) * 100
+	overhead := float64(median2-median1) / float64(median1) * 100
 	t.Logf("Overhead: %.2f%%", overhead)
 
-	// Allow up to 100% overhead (generous for noisy environments and under system load)
+	// Stricter threshold with more reliable measurement
+	// With median of multiple samples, we can be more confident about the measurement
+	// Allow up to 50% overhead (was 100%, but now we have better statistical power)
 	// In production without race detector, overhead is typically < 5%
-	// This test is informational and can show high variance when system is under load
-	if overhead > 100 {
-		t.Errorf("NoOpMetricsCollector overhead too high: %.2f%% (expected < 100%%)", overhead)
-	} else if overhead > 50 {
-		t.Logf("INFO: Overhead is high but acceptable for system under load: %.2f%%", overhead)
+	if overhead > 50 {
+		t.Errorf("NoOpMetricsCollector overhead too high: %.2f%% (expected < 50%%)", overhead)
+	} else if overhead > 25 {
+		t.Logf("INFO: Overhead is elevated but acceptable: %.2f%%", overhead)
 	}
 }
 
@@ -369,4 +398,34 @@ func (a *atomicMetricsCollector) RecordDelete(latencyNs int64) {
 
 func (a *atomicMetricsCollector) RecordEviction() {
 	// Not tracked in this test
+}
+
+func (a *atomicMetricsCollector) RecordExpiration() {
+	// Not tracked in this test
+}
+
+// medianDuration calculates the median of a slice of durations.
+// This is more robust than mean for filtering out outliers in performance tests.
+func medianDuration(durations []time.Duration) time.Duration {
+	if len(durations) == 0 {
+		return 0
+	}
+
+	// Make a copy to avoid modifying the original
+	sorted := make([]time.Duration, len(durations))
+	copy(sorted, durations)
+
+	// Sort durations
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i] < sorted[j]
+	})
+
+	// Return median
+	mid := len(sorted) / 2
+	if len(sorted)%2 == 0 {
+		// Even number of elements: average of two middle elements
+		return (sorted[mid-1] + sorted[mid]) / 2
+	}
+	// Odd number of elements: middle element
+	return sorted[mid]
 }

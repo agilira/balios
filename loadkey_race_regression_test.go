@@ -78,7 +78,13 @@ func TestLoadKeyDataRaceRegression(t *testing.T) {
 				// 1. A torn read (partial key)
 				// 2. A panic from invalid pointer
 				// 3. An empty string when we shouldn't
-				_, _ = cache.Get(key)
+				if val, ok := cache.Get(key); ok {
+					// Validate that the value is well-formed
+					valStr, isString := val.(string)
+					if !isString || len(valStr) == 0 {
+						corruptedRead.Add(1)
+					}
+				}
 				totalReads.Add(1)
 
 				runtime.Gosched() // Encourage race conditions

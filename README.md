@@ -19,7 +19,7 @@ Balios is a high-performance in-memory caching library for Go, based on W-TinyLF
 - **Automatic Loading**: `GetOrLoad()` API with singleflight pattern for cache stampede prevention
 - **W-TinyLFU Algorithm**: Combines frequency and recency for optimal eviction decisions
 - **Lock-Free**: Uses atomic primitives for high concurrency
-- **TTL Support**: Automatic expiration with lazy cleanup
+- **TTL Support**: Hybrid expiration strategy with inline opportunistic cleanup + manual `ExpireNow()` API (v1.1.32+)
 - **Context Support**: Timeout and cancellation for loader functions
 - **Negative Caching**: Cache loader errors to prevent repeated failed operations (v1.1.2+)
 - **Hot Reload**: Dynamic configuration updates via [Argus](https://github.com/agilira/argus)
@@ -81,34 +81,6 @@ func main() {
     fmt.Printf("Hit ratio: %.2f%%\n", stats.HitRatio()*100)
 }
 ```
-
-### Advanced Configuration
-
-**Negative Caching** (v1.1.2+): Cache loader errors to prevent repeated failed operations
-
-```go
-cache := balios.NewGenericCache[int, User](balios.Config{
-    MaxSize:          10_000,
-    TTL:              5 * time.Minute,
-    NegativeCacheTTL: 30 * time.Second, // Cache errors for 30s
-})
-
-// First call: loader fails
-_, err := cache.GetOrLoad(123, func() (User, error) {
-    return User{}, fmt.Errorf("database unavailable")
-})
-// Error returned
-
-// Subsequent calls within 30s: cached error returned WITHOUT calling loader
-_, err = cache.GetOrLoad(123, func() (User, error) {
-    panic("This won't be called - error is cached!")
-})
-// Same error returned (no loader execution)
-```
-
-**Use cases**: Circuit breaker pattern, API rate limiting, external service failures.  
-**See**: [GetOrLoad documentation](docs/GETORLOAD.md#negative-caching-v112) for complete guide.
-
 ## Performance
 
 **Single-Threaded Performance:**
@@ -151,6 +123,33 @@ _, err = cache.GetOrLoad(123, func() (User, error) {
 
 Run the benchmarks on your hardware [benchmarks/](benchmarks/) to evaluate performance on your specific workload and configuration. 
 See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed analysis and methodology.
+
+### Advanced Configuration
+
+**Negative Caching** (v1.1.2+): Cache loader errors to prevent repeated failed operations
+
+```go
+cache := balios.NewGenericCache[int, User](balios.Config{
+    MaxSize:          10_000,
+    TTL:              5 * time.Minute,
+    NegativeCacheTTL: 30 * time.Second, // Cache errors for 30s
+})
+
+// First call: loader fails
+_, err := cache.GetOrLoad(123, func() (User, error) {
+    return User{}, fmt.Errorf("database unavailable")
+})
+// Error returned
+
+// Subsequent calls within 30s: cached error returned WITHOUT calling loader
+_, err = cache.GetOrLoad(123, func() (User, error) {
+    panic("This won't be called - error is cached!")
+})
+// Same error returned (no loader execution)
+```
+
+**Use cases**: Circuit breaker pattern, API rate limiting, external service failures.  
+**See**: [GetOrLoad documentation](docs/GETORLOAD.md#negative-caching-v112) for complete guide.
 
 ### Automatic Loading with GetOrLoad
 

@@ -197,7 +197,7 @@ func min4(a, b, c, d uint64) uint64 {
 }
 
 // stringHash computes a 64-bit hash of a string using FNV-1a algorithm.
-// This is optimized for performance and zero allocations.
+// This is optimized for performance & zero allocations.
 func stringHash(s string) uint64 {
 	const (
 		fnv64Offset = 14695981039346656037

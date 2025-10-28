@@ -238,7 +238,7 @@ func NewCache(config Config) Cache {
 		metricsCollector: config.MetricsCollector,
 		entries:          make([]entry, tableSize),
 		sketch:           newFrequencySketch(config.MaxSize),
-		rngState:         uint64(config.TimeProvider.Now()), // Seed with current time
+		rngState:         uint64(config.TimeProvider.Now()), // #nosec G115 -- time value always positive, no overflow risk
 		stopCleanup:      make(chan struct{}),               // Channel for stopping background cleanup
 	}
 
@@ -917,7 +917,7 @@ func (c *wtinyLFUCache) evictOne() {
 
 		// Use true random sampling to prevent adversarial workloads from
 		// exploiting deterministic patterns
-		start := int(c.fastRand() % uint64(tableSize))
+		start := int(c.fastRand() % uint64(tableSize)) // #nosec G115 -- tableSize bounded by maxSize, safe conversion
 		step := tableSize / evictionSampleSize
 		if step < 1 {
 			step = 1

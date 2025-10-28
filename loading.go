@@ -123,7 +123,7 @@ func (c *wtinyLFUCache) GetOrLoad(key string, loader func() (interface{}, error)
 
 	// We are the first (we inserted newFlight), execute the loader
 	defer func() {
-		// CRITICAL: Close done channel FIRST to broadcast to waiters
+		// IMPORTANT: Close done channel FIRST to broadcast to waiters
 		close(flight.done)
 		flight.wg.Done()
 		c.inflight.Delete(callKey) // Cleanup from per-cache map
@@ -262,7 +262,7 @@ func (c *wtinyLFUCache) GetOrLoadWithContext(ctx context.Context, key string, lo
 
 	// We are the first (we inserted newFlight), execute the loader
 	defer func() {
-		// CRITICAL: Close done channel FIRST to broadcast to waiters
+		// IMPORTANT: Close done channel FIRST to broadcast to waiters
 		close(flight.done)
 		flight.wg.Done()
 		c.inflight.Delete(callKey) // Cleanup from per-cache map

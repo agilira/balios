@@ -22,7 +22,7 @@
 // METHODOLOGY:
 // 1. Identify attack surface and entry points
 // 2. Create targeted exploit scenarios
-// 3. Test boundary conditions and edge cases
+// 3. Test boundary conditions & edge cases
 // 4. Validate security controls and mitigations
 // 5. Document vulnerabilities and remediation steps
 //

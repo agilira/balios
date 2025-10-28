@@ -314,7 +314,6 @@ We encourage the community to build specialized wrappers for domain-specific use
 1. Follow the interface compatibility guidelines
 2. Document performance characteristics clearly
 3. Include comprehensive tests and benchmarks
-4. Consider submitting to [awesome-balios](https://github.com/agilira/awesome-balios)
 
 ### Naming Convention
 
@@ -355,7 +354,6 @@ Wrapper packages can evolve independently and may have different version numbers
 We welcome contributions to:
 - Core improvements (performance, bug fixes, documentation)
 - Official wrapper packages (following guidelines above)
-- Community wrappers (showcase your work!)
 - Documentation improvements
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.

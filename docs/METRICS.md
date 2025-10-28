@@ -607,7 +607,6 @@ func (c *SamplingCollector) RecordGet(latencyNs int64, hit bool) {
 - [otel/README.md](../otel/README.md) - OpenTelemetry package documentation
 - [examples/otel-prometheus/](../examples/otel-prometheus/) - Complete example with Grafana
 - [ARCHITECTURE.md](ARCHITECTURE.md) - W-TinyLFU internals
-- [PERFORMANCE.md](PERFORMANCE.md) - Benchmark results
 
 ---
 

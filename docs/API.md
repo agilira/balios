@@ -1,9 +1,8 @@
 # Balios API Reference
-### High-performance, thread-safe, in-memory cache for Go
 
 ## Overview
 
-Balios is a production-ready cache implementation based on the **W-TinyLFU** (Window Tiny Least Frequently Used) algorithm, designed to deliver exceptional performance through zero-allocation operations and lock-free data structures.
+Balios is a high-performance in-memory cache for Go based on the **W-TinyLFU** (Window Tiny Least Frequently Used) algorithm, designed to deliver exceptional performance through zero-allocation operations and lock-free data structures.
 
 ## Installation
 

@@ -293,7 +293,7 @@ func FuzzCacheSetGet(f *testing.F) {
 
 // FuzzCacheConcurrentOperations fuzzes concurrent cache operations for race conditions.
 //
-// SECURITY CRITICAL: Balios is lock-free and designed for high concurrency.
+// SECURITY CRITICAL: Balios is lock-free & designed for high concurrency.
 // Race conditions could cause:
 // - Data corruption (wrong values returned)
 // - Memory safety violations (dangling pointers, use-after-free)

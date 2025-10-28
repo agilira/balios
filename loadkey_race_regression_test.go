@@ -34,7 +34,7 @@ func TestLoadKeyDataRaceRegression(t *testing.T) {
 	cache := NewCache(Config{
 		MaxSize: 1000,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	const (
 		numGoroutines = 10
@@ -117,7 +117,7 @@ func TestLoadKeyConsistencyUnderPressure(t *testing.T) {
 	cache := NewCache(Config{
 		MaxSize: 100,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	const (
 		numKeys       = 50
@@ -168,7 +168,7 @@ func TestSeqLockProtectionExists(t *testing.T) {
 	cache := NewCache(Config{
 		MaxSize: 100,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	const numOps = 10000
 	var wg sync.WaitGroup
@@ -207,7 +207,7 @@ func BenchmarkLoadKeyWithContention(b *testing.B) {
 	cache := NewCache(Config{
 		MaxSize: 1000,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Pre-populate
 	for i := 0; i < 100; i++ {

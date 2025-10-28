@@ -123,7 +123,7 @@ type stringHeader struct {
 	len  int
 }
 
-// Helper functions for atomic key operations - ZERO ALLOCATION with SeqLock
+// Helper functions for atomic key operations - Zero allocation with SeqLock
 func (e *entry) loadKey() string {
 	// SeqLock read pattern: retry if version is odd (writer active) or changes during read
 	// This prevents torn reads where dataPtr and length don't match
@@ -296,7 +296,7 @@ func (c *wtinyLFUCache) populateEntry(entry *entry, key string, keyHash uint64, 
 	atomic.StoreUint64(&entry.keyHash, keyHash)
 	entry.storeKey(key)
 
-	// CRITICAL: Use valueHolder wrapper to avoid atomic.Value reset race
+	// IMPORTANT: Use valueHolder wrapper to avoid atomic.Value reset race
 	//
 	// atomic.Value requires all stored values to be of the same concrete type.
 	// By always storing *valueHolder (fixed type), we can:
@@ -402,7 +402,7 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 					c.metricsCollector.RecordSet(latency)
 				}
 
-				// Critical: Check for duplicates to maintain cache consistency
+				// Important: Check for duplicates to maintain cache consistency
 				// In high concurrency, multiple threads might create the same key
 				c.removeDuplicateKeys(key, keyHash, entry)
 
@@ -760,7 +760,7 @@ func (c *wtinyLFUCache) Clear() {
 // cleanupNegativeCache runs in background to remove expired negative cache entries.
 // This prevents memory leak from expired errors that are never accessed again.
 //
-// CRITICAL FIX for issue #2 from code review:
+// IMPORTANT FIX for issue #2 from code review:
 // Without this cleanup, negativeCache grows unbounded as expired entries
 // are only deleted when explicitly accessed after expiration.
 //

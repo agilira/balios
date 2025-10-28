@@ -58,8 +58,10 @@ func TestNegativeCacheMemoryLeak(t *testing.T) {
 		t.Errorf("Expected %d negative entries, got %d", numFailedKeys, negativeCount)
 	}
 
-	// Wait for TTL to expire
-	time.Sleep(150 * time.Millisecond)
+	// Wait for TTL to expire + cleanup to run
+	// Cleanup runs at TTL/2 interval (50ms for 100ms TTL)
+	// Wait for: TTL expiration (100ms) + 2 cleanup cycles (100ms) = 200ms
+	time.Sleep(250 * time.Millisecond)
 
 	// WITHOUT FIX: Expired entries remain because nobody accesses them
 	// WITH FIX: Background cleanup removes them

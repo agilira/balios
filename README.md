@@ -8,7 +8,7 @@ Balios is a high-performance in-memory caching library for Go, based on W-TinyLF
 [![CodeQL](https://github.com/agilira/balios/actions/workflows/codeql.yml/badge.svg)](https://github.com/agilira/balios/actions/workflows/codeql.yml)
 [![Security](https://img.shields.io/badge/security-gosec-brightgreen.svg)](https://github.com/agilira/balios/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/agilira/balios)](https://goreportcard.com/report/github.com/agilira/balios)
-[![Test Coverage](https://img.shields.io/badge/coverage-94.8%25-brightgreen)](https://github.com/agilira/balios)
+[![Test Coverage](https://img.shields.io/badge/coverage-94.4%25-brightgreen)](https://github.com/agilira/balios)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11297/badge)](https://www.bestpractices.dev/projects/11297)
 
 **[Features](#features) • [Quick Start](#quick-start) • [Performance](#performance) • [Observability Architecture](#observability-architecture) • [Philosophy](#the-philosophy-behind-balios) • [Documentation](#documentation)**
@@ -22,7 +22,6 @@ Balios is a high-performance in-memory caching library for Go, based on W-TinyLF
 - **TTL Support**: Hybrid expiration strategy with inline opportunistic cleanup + manual `ExpireNow()` API (v1.1.32+)
 - **Context Support**: Timeout and cancellation for loader functions
 - **Negative Caching**: Cache loader errors to prevent repeated failed operations (v1.1.2+)
-- **Hot Reload**: Dynamic configuration updates via [Argus](https://github.com/agilira/argus)
 - **Structured Errors**: Rich error context with [go-errors](https://github.com/agilira/go-errors) - see [examples/errors/](examples/errors/)
 - **Observability**: OpenTelemetry integration for metrics (p50/p95/p99 latencies, hit ratio) & logger interface. Zero overhead when disabled (compiler eliminates no-op implementations) - see [examples/otel-prometheus/](examples/otel-prometheus/)
 - **Secure by Design**: [Red-team tested](balios_security_test.go) and [fuzz tested](balios_fuzz_test.go) angainst a wide range of attacks
@@ -87,39 +86,39 @@ func main() {
 
 | Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
 | :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **143.5 ns/op** | **+0%** | **113.1 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 146.2 ns/op | +2% | 113.1 ns/op | +0% | 1/0 allocs/op |
-| Otter | 345.9 ns/op | +141% | 119.9 ns/op | +6% | 1/0 allocs/op |
-| Ristretto | 278.7 ns/op | +94% | 157.2 ns/op | +39% | 2/0 allocs/op |
+| **Balios** | **159.8 ns/op** | **+0%** | **118.9 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 165.6 ns/op | +4% | 117.6 ns/op | -1% | 1/0 allocs/op |
+| Otter | 413.5 ns/op | +159% | 126.4 ns/op | +6% | 1/0 allocs/op |
+| Ristretto | 292.6 ns/op | +83% | 154.6 ns/op | +30% | 2/0 allocs/op |
 
 **Parallel Performance (8 cores):**
 
 | Package | Set (ns/op) | Set % vs Balios | Get (ns/op) | Get % vs Balios | Allocations |
 | :------ | ----------: | --------------: | ----------: | --------------: | ----------: |
-| **Balios** | **39.31 ns/op** | **+0%** | **25.40 ns/op** | **+0%** | **1/0 allocs/op** |
-| Balios-Generic | 41.26 ns/op | +5% | 25.40 ns/op | +0% | 1/0 allocs/op |
-| Otter | 237.0 ns/op | +503% | 23.99 ns/op | -6% | 1/0 allocs/op |
-| Ristretto | 114.8 ns/op | +192% | 30.80 ns/op | +21% | 1/0 allocs/op |
+| **Balios** | **42.25 ns/op** | **+0%** | **24.99 ns/op** | **+0%** | **1/0 allocs/op** |
+| Balios-Generic | 45.47 ns/op | +8% | 27.24 ns/op | +9% | 1/0 allocs/op |
+| Otter | 260.2 ns/op | +516% | 25.48 ns/op | +2% | 1/0 allocs/op |
+| Ristretto | 112.5 ns/op | +166% | 30.52 ns/op | +22% | 1/0 allocs/op |
 
 **Mixed Workloads (Realistic Scenarios):**
 
 | Workload | Balios | Balios-Generic | Otter | Ristretto | Best |
 | :------- | -----: | -------------: | ----: | --------: | :--- |
-| Write-Heavy (10% R / 90% W) | **40.49 ns/op** | 41.63 ns/op | 219.7 ns/op | 184.9 ns/op | **Balios** |
-| Balanced (50% R / 50% W) | **38.58 ns/op** | 58.21 ns/op | 132.9 ns/op | 108.6 ns/op | **Balios** |
-| Read-Heavy (90% R / 10% W) | **30.65 ns/op** | 31.61 ns/op | 57.42 ns/op | 117.4 ns/op | **Balios** |
-| Read-Only (100% R) | **29.97 ns/op** | 28.69 ns/op | 28.41 ns/op | 35.05 ns/op | **Otter** |
+| Write-Heavy (10% R / 90% W) | **46.52 ns/op** | 49.99 ns/op | 227.8 ns/op | 147.6 ns/op | **Balios** |
+| Balanced (50% R / 50% W) | **42.50 ns/op** | 43.87 ns/op | 136.5 ns/op | 107.9 ns/op | **Balios** |
+| Read-Heavy (90% R / 10% W) | **32.38 ns/op** | 33.74 ns/op | 50.00 ns/op | 72.58 ns/op | **Balios** |
+| Read-Only (100% R) | 28.24 ns/op | 29.54 ns/op | **27.20 ns/op** | 35.41 ns/op | **Otter** |
 
 **Hit Ratio (100K requests, Zipf distribution):**
 
 | Cache | Hit Ratio | Notes |
 | :---- | --------: | :---- |
-| **Balios** | 79.34% |  Statistically equivalent |
-| Balios-Generic | 79.67% | Statistically equivalent |
-| Otter | **79.68%** | Statistically equivalent |
-| Ristretto | 72.59% | Statistically equivalent, within noise margin |
+| **Balios** | 79.86% | Excellent |
+| Balios-Generic | 79.71% | Excellent |
+| **Otter** | 79.53% | Excellent |
+| Ristretto | 71.19% | Good |
 
-**Test Environment:** AMD Ryzen 5 7520U Go 1.25+
+**Test Environment:** AMD Ryzen 5 7520U, Go 1.25+
 
 Run the benchmarks on your hardware [benchmarks/](benchmarks/) to evaluate performance on your specific workload and configuration. 
 See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed analysis and methodology.

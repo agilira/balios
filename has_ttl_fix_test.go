@@ -1,4 +1,9 @@
-// Test for Has() TTL consistency fix
+// has_ttl_fix_test.go: tests for Has() TTL consistency fix
+//
+// Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira library
+// SPDX-License-Identifier: MPL-2.0
+
 package balios
 
 import (

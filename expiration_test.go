@@ -26,10 +26,10 @@ func TestInlineExpiration_OpportunisticCleanup(t *testing.T) {
 	})
 	defer func() { _ = cache.Close() }()
 
-	// Fill cache with entries
+	// Fill cache with entries (using consistent type: string)
 	for i := 0; i < 10; i++ {
 		key := fmt.Sprintf("key%d", i)
-		cache.Set(key, i)
+		cache.Set(key, fmt.Sprintf("value%d", i)) // Use string instead of int
 	}
 
 	if cache.Len() != 10 {

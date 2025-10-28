@@ -14,9 +14,9 @@
 //   - W-TinyLFU Algorithm: Optimal cache hit ratio (combines frequency and recency)
 //   - Lock-Free Design: Atomic operations for high concurrency
 //   - Type-Safe Generics: GenericCache[K comparable, V any]
-//   - TTL Support: Automatic expiration with lazy cleanup
+//   - TTL Support: Automatic expiration with lazy cleanup + manual ExpireNow() API
 //   - GetOrLoad API: Cache stampede prevention with singleflight pattern
-//   - Hot Reload: Dynamic configuration updates via file watcher
+//   - Negative Caching: Cache loader errors to prevent repeated failures (v1.1.2+)
 //   - Structured Errors: Rich error context with error codes
 //   - Metrics Collection: MetricsCollector interface for observability
 //
@@ -179,13 +179,6 @@
 //	    // Optional: Logger for errors and events (default: nil)
 //	    Logger: myLogger,
 //
-//	    // Optional: Hot reload configuration (default: disabled)
-//	    HotReloadConfig: &balios.HotReloadConfig{
-//	        Enabled:      true,
-//	        FilePath:     "/etc/myapp/cache.json",
-//	        PollInterval: 30 * time.Second,
-//	    },
-//
 //	    // Optional: Metrics collector (default: NoOp, zero overhead)
 //	    MetricsCollector: metricsCollector,
 //
@@ -194,31 +187,6 @@
 //	}
 //
 //	cache := balios.NewGenericCache[string, User](config)
-//
-// # Hot Configuration Reload
-//
-// Enable dynamic configuration updates without restarting:
-//
-//	config := balios.Config{
-//	    MaxSize: 10_000,
-//	    HotReloadConfig: &balios.HotReloadConfig{
-//	        Enabled:      true,
-//	        FilePath:     "/etc/myapp/cache.json",
-//	        PollInterval: 30 * time.Second,
-//	    },
-//	}
-//
-//	cache := balios.NewGenericCache[string, User](config)
-//
-// The cache.json file format:
-//
-//	{
-//	    "max_size": 20000,
-//	    "ttl_seconds": 7200
-//	}
-//
-// Changes are detected and applied automatically without disrupting operations.
-// Hot reload uses github.com/agilira/argus file watcher for efficient monitoring.
 //
 // # Error Handling
 //
@@ -252,10 +220,10 @@
 //
 // Benchmark results (AMD Ryzen 5 7520U, Go 1.25+):
 //
-//	BenchmarkCache_Set-8                    24680026   135.5 ns/op    10 B/op    1 allocs/op
-//	BenchmarkCache_Get-8                    30607568   108.7 ns/op     0 B/op    0 allocs/op
-//	BenchmarkCache_Get_Parallel-8          143774287    27.90 ns/op    0 B/op    0 allocs/op
-//	BenchmarkGenericCache_GetOrLoad_Hit-8   Same as Get performance (cache hit)
+//	BenchmarkBalios_Set_SingleThread-8       7565774   159.8 ns/op    10 B/op    1 allocs/op
+//	BenchmarkBalios_Get_SingleThread-8       9937665   118.9 ns/op     0 B/op    0 allocs/op
+//	BenchmarkBalios_Set_Parallel-8          25257999    42.25 ns/op   10 B/op    1 allocs/op
+//	BenchmarkBalios_Get_Parallel-8          42264384    24.99 ns/op    0 B/op    0 allocs/op
 //
 // Key characteristics:
 //   - Zero allocations on hot path (Get/Set)
@@ -264,10 +232,10 @@
 //   - Sub-microsecond latencies
 //
 // Hit ratio comparison (100K requests, Zipf distribution):
-//   - Balios: 79.34%
-//   - Balios-Generic: 79.67%
-//   - Otter: 79.68%
-//   - Ristretto: 68.59%
+//   - Balios: 79.86%
+//   - Balios-Generic: 79.71%
+//   - Otter: 79.53%
+//   - Ristretto: 71.19%
 //
 // # Memory Layout
 //

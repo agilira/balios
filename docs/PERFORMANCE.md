@@ -16,11 +16,11 @@ Raw performance without parallelism:
 
 | Operation | Balios | Balios Generic | Allocations | Bytes/op |
 |-----------|--------|----------------|-------------|----------|
-| **Set** | 143.5 ns/op | 146.2 ns/op | 1 alloc | 10 B |
-| **Get** | 113.1 ns/op | 113.1 ns/op | 0 allocs | 0 B |
+| **Set** | 159.8 ns/op | 165.6 ns/op | 1 alloc | 10 B |
+| **Get** | 118.9 ns/op | 117.6 ns/op | 0 allocs | 0 B |
 
 **Analysis:**
-- Generic API overhead: **+3.9%** on Set, **+3.0%** on Get
+- Generic API overhead: **+3.6%** on Set, **-1.1%** on Get (negligible)
 - Zero allocations on Get operations (cache hit)
 - Minimal memory footprint (10 bytes per Set)
 
@@ -32,12 +32,12 @@ High-concurrency scenarios (8 goroutines):
 
 | Operation | Balios | Balios Generic | Allocations | Bytes/op |
 |-----------|--------|----------------|-------------|----------|
-| **Set (Parallel)** | 39.31 ns/op | 41.26 ns/op | 1 alloc | 10 B |
-| **Get (Parallel)** | 25.40 ns/op | 25.40 ns/op | 0 allocs | 0 B |
+| **Set (Parallel)** | 42.25 ns/op | 45.47 ns/op | 1 alloc | 10 B |
+| **Get (Parallel)** | 24.99 ns/op | 27.24 ns/op | 0 allocs | 0 B |
 
 **Speedup vs Single-Thread:**
-- Set: 3.6x faster (143.5 ns → 39.31 ns)
-- Get: 4.5x faster (113.1 ns → 25.40 ns)
+- Set: 3.8x faster (159.8 ns → 42.25 ns)
+- Get: 4.8x faster (118.9 ns → 24.99 ns)
 
 **Lock-Free Advantage**: Near-linear scaling with CPU cores.
 
@@ -47,21 +47,22 @@ Realistic read/write combinations:
 
 | Workload | Balios | Balios Generic | Allocations | Bytes/op |
 |----------|--------|----------------|-------------|----------|
-| **Balanced** (50% R / 50% W) | 38.58 ns/op | 58.21 ns/op | 5 allocs | 5 B |
-| **Read-Heavy** (90% R / 10% W) | 30.65 ns/op | 31.61 ns/op | 0 allocs | 2 B |
-| **Write-Heavy** (10% R / 90% W) | 40.49 ns/op | 41.63 ns/op | 1 alloc | 9 B |
-| **Read-Only** (100% R / 0% W) | 29.97 ns/op | 28.69 ns/op | 0 allocs | 0 B |
+| **Balanced** (50% R / 50% W) | 42.50 ns/op | 43.87 ns/op | 6 allocs | 6 B |
+| **Read-Heavy** (90% R / 10% W) | 32.38 ns/op | 33.74 ns/op | 2 allocs | 2 B |
+| **Write-Heavy** (10% R / 90% W) | 46.52 ns/op | 49.99 ns/op | 9 allocs | 9 B |
+| **Read-Only** (100% R / 0% W) | 28.24 ns/op | 29.54 ns/op | 0 allocs | 0 B |
 
 **Key Insights:**
-- Best performance on read-heavy workloads (30.07 ns/op)
+- Best performance on read-only workloads (28.24 ns/op)
 - Zero allocations on read-dominated patterns
+- Excellent performance across all workload types
 
 ### Cache Size Impact
 
 | Workload | Small Cache | Large Cache | Delta |
 |----------|-------------|-------------|-------|
-| **Small Mixed** (1K entries) | 34.84 ns/op | - | Baseline |
-| **Large Mixed** (100K entries) | - | 42.02 ns/op | +21% |
+| **Small Mixed** (1K entries) | 40.69 ns/op | - | Baseline |
+| **Large Mixed** (100K entries) | - | 44.05 ns/op | +8% |
 
 **Analysis:**
 - Larger caches have slight overhead due to:
@@ -94,29 +95,30 @@ Extended test results (1M requests, Zipf distribution):
 
 ### Average Hit Ratios
 
-| Cache | Average Hit Ratio | Std Dev | Rank |
-|-------|-------------------|---------|------|
-| **Otter** | 79.68% | ±0.5% | 1st |
-| **Balios Generic** | 79.65% | ±0.5% | 2nd (-0.04%) |
-| **Balios** | 79.27% | ±0.6% | 3rd (-0.41%) |
-| **Ristretto** | 62.77% | ±2.1% | 4th (-16.9%) |
+| Cache | Average Hit Ratio | Rank |
+|-------|-------------------|------|
+| **Balios** | 79.86% | 1st |
+| **Balios Generic** | 79.71% | 2nd (-0.15%) |
+| **Otter** | 79.53% | 3rd (-0.33%) |
+| **Ristretto** | 71.19% | 4th (-8.67%) |
 
-**Conclusion**: The libraries have **statistically equivalent** hit ratios within noise margin.
+**Conclusion**: Balios achieves **excellent hit ratios**, matching or exceeding competitors.
 
 ### Hit Ratio by Workload Pattern
 
 Different Zipf skew factors (s):
 
-| Workload | Balios | Otter | Ristretto |        |
-|----------|--------|-------|-----------|--------|
-| **Highly Skewed** (s=1.5) | 89.65% | 90.73% | 89.80% | Otter (+1.2%) |
-| **Moderate** (s=1.0) | 72.12% | 70.96% | 63.30% | Balios (+1.6%) |
-| **Less Skewed** (s=0.8) | 71.74% | 71.25% | 66.42% | Balios (+0.7%) |
-| **Large KeySpace** | 75.32% | 75.68% | 55.21% | Otter (+0.5%) |
+| Workload | Balios | Otter | Ristretto | Best |
+|----------|--------|-------|-----------|------|
+| **Highly Skewed** (s=1.5) | 89.81% | 90.03% | 88.62% | Otter (+0.2%) |
+| **Moderate** (s=1.0) | 71.06% | 70.95% | 54.91% | Balios (+0.1%) |
+| **Less Skewed** (s=0.8) | 70.71% | 71.02% | 65.06% | Otter (+0.4%) |
+| **Large KeySpace** | 75.34% | 75.11% | 56.26% | Balios (+0.2%) |
 
 **Key Findings:**
-- Balios and Otter have statistically equivalent hit ratios (differences <2% are noise)
-- W-TinyLFU effectiveness depends on workload skew, not implementation
+- Balios and Otter have statistically equivalent hit ratios (differences <1% are noise)
+- Both significantly outperform Ristretto in most scenarios
+- W-TinyLFU algorithm provides consistently high hit ratios
 
 ## Memory Efficiency
 

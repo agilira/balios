@@ -7,15 +7,28 @@
 package balios
 
 import (
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
 // entry represents a cache entry with atomic access.
 // Field ordering is critical for atomic alignment on 32-bit architectures:
 // All 64-bit fields MUST be at the beginning and 8-byte aligned.
+// valueHolder wraps values stored in atomic.Value to allow type changes
+// without resetting atomic.Value (which creates races).
+//
+// OPTIMIZATION: The data field is itself an atomic.Value, allowing us to:
+// 1. Reuse the same valueHolder on updates (no allocation on hot path)
+// 2. Maintain thread-safety for concurrent reads/writes
+// 3. Allow type changes when slots are reused (no atomic.Value reset needed)
+type valueHolder struct {
+	data atomic.Value // Atomic to allow zero-alloc updates
+}
+
 type entry struct {
 	// 64-bit atomic fields (MUST be first for 32-bit alignment)
 	version  uint64 // SeqLock version counter: odd = writing, even = stable/readable
@@ -25,7 +38,7 @@ type entry struct {
 
 	// Pointer and composite fields (naturally aligned after 64-bit fields)
 	keyData unsafe.Pointer // Thread-safe key data pointer (points to string bytes)
-	value   atomic.Value   // Thread-safe value storage
+	value   atomic.Value   // Thread-safe value storage (always contains *valueHolder)
 
 	// 32-bit fields (can be placed last)
 	valid int32 // atomic flag: 0=empty, 1=valid, 2=deleted, 3=pending
@@ -59,6 +72,9 @@ type wtinyLFUCache struct {
 	// Negative cache: stores recent errors to prevent repeated failed loads
 	// Key: "neg:" + key, Value: negativeEntry
 	negativeCache sync.Map
+
+	// Stop channel for background cleanup goroutines
+	stopCleanup chan struct{}
 
 	// Atomic statistics counters
 	hits        int64
@@ -223,6 +239,13 @@ func NewCache(config Config) Cache {
 		entries:          make([]entry, tableSize),
 		sketch:           newFrequencySketch(config.MaxSize),
 		rngState:         uint64(config.TimeProvider.Now()), // Seed with current time
+		stopCleanup:      make(chan struct{}),               // Channel for stopping background cleanup
+	}
+
+	// Start negative cache cleanup goroutine if negative caching is enabled
+	// CRITICAL FIX for issue #2: Prevent memory leak from expired negative entries
+	if config.NegativeCacheTTL > 0 {
+		go cache.cleanupNegativeCache()
 	}
 
 	return cache
@@ -273,13 +296,19 @@ func (c *wtinyLFUCache) populateEntry(entry *entry, key string, keyHash uint64, 
 	atomic.StoreUint64(&entry.keyHash, keyHash)
 	entry.storeKey(key)
 
-	// If reusing a deleted entry, reset atomic.Value BEFORE storing new value
-	// to allow GC of old value. Must be done before Store() to ensure type consistency.
-	if oldState == entryDeleted {
-		entry.value = atomic.Value{}
-	}
+	// CRITICAL: Use valueHolder wrapper to avoid atomic.Value reset race
+	//
+	// atomic.Value requires all stored values to be of the same concrete type.
+	// By always storing *valueHolder (fixed type), we can:
+	// 1. Change the actual value type in valueHolder.data
+	// 2. Avoid resetting atomic.Value (which creates races)
+	// 3. Maintain thread-safety without additional synchronization
+	//
+	// OPTIMIZATION: valueHolder.data is atomic.Value, allowing zero-alloc updates.
+	holder := &valueHolder{}
+	holder.data.Store(value)
+	entry.value.Store(holder)
 
-	entry.value.Store(value)
 	atomic.StoreInt64(&entry.expireAt, expireAt)
 
 	// Mark entry as valid - this acts as a memory barrier
@@ -395,8 +424,10 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
 				// Check if this is really the same key (now safe to read)
 				if storedKey := entry.loadKey(); storedKey == key {
-					// Update value atomically
-					entry.value.Store(value)
+					// OPTIMIZATION: Reuse existing valueHolder on update (zero-alloc hot path)
+					// Instead of allocating new holder, just update the atomic data field
+					holder := entry.value.Load().(*valueHolder)
+					holder.data.Store(value)
 					atomic.StoreInt64(&entry.expireAt, expireAt)
 
 					// Release the entry back to valid state
@@ -433,6 +464,10 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 			if atomic.CompareAndSwapInt32(&entry.valid, state, entryPending) {
 				// Successfully claimed - populate entry using helper
 				c.populateEntry(entry, key, keyHash, value, expireAt, state)
+
+				// CRITICAL: Also check for duplicates in post-eviction path
+				// This catches duplicates created during eviction
+				c.removeDuplicateKeys(key, keyHash, entry)
 
 				// Record metrics for successful Set
 				if c.metricsCollector != nil {
@@ -514,13 +549,23 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 					return nil, false
 				}
 
-				// Read value atomically
-				value := entry.value.Load()
-
-				// Double-check state hasn't changed during read
+				// CRITICAL: Double-check state BEFORE reading value
+				// This prevents race with Set() that might modify entry
 				if atomic.LoadInt32(&entry.valid) != entryValid {
 					continue
 				}
+
+				// Read value atomically (always returns *valueHolder)
+				holder := entry.value.Load().(*valueHolder)
+
+				// Triple-check state AFTER reading holder pointer
+				// Ensures we didn't read during a concurrent modification
+				if atomic.LoadInt32(&entry.valid) != entryValid {
+					continue
+				}
+
+				// Extract actual value from holder's atomic data field
+				value := holder.data.Load()
 
 				// Found key and not expired - return value
 				atomic.AddInt64(&c.hits, 1)
@@ -675,6 +720,15 @@ func (c *wtinyLFUCache) Capacity() int {
 
 // Clear removes all entries.
 func (c *wtinyLFUCache) Clear() {
+	// Stop cleanup goroutine if running
+	// CRITICAL: Close stopCleanup before clearing negative cache to prevent races
+	select {
+	case <-c.stopCleanup:
+		// Already closed
+	default:
+		close(c.stopCleanup)
+	}
+
 	// Reset all entries
 	for i := range c.entries {
 		atomic.StoreInt32(&c.entries[i].valid, entryEmpty)
@@ -683,6 +737,12 @@ func (c *wtinyLFUCache) Clear() {
 		// Values will be overwritten when entries are reused.
 		atomic.StoreUint64(&c.entries[i].keyHash, 0)
 	}
+
+	// Clear negative cache
+	c.negativeCache.Range(func(key, value interface{}) bool {
+		c.negativeCache.Delete(key)
+		return true
+	})
 
 	// Reset counters
 	atomic.StoreInt64(&c.size, 0)
@@ -695,6 +755,69 @@ func (c *wtinyLFUCache) Clear() {
 
 	// Reset frequency sketch
 	c.sketch.reset()
+}
+
+// cleanupNegativeCache runs in background to remove expired negative cache entries.
+// This prevents memory leak from expired errors that are never accessed again.
+//
+// CRITICAL FIX for issue #2 from code review:
+// Without this cleanup, negativeCache grows unbounded as expired entries
+// are only deleted when explicitly accessed after expiration.
+//
+// The cleanup runs periodically (half of TTL) to balance memory cleanup
+// vs. CPU overhead. It stops when cache is cleared via stopCleanup channel.
+func (c *wtinyLFUCache) cleanupNegativeCache() {
+	// Calculate cleanup interval: run at half the TTL interval
+	// This ensures entries are cleaned up reasonably soon after expiration
+	// without excessive CPU usage from too-frequent scans
+	cleanupInterval := time.Duration(c.negativeTTLNanos / 2)
+	if cleanupInterval < 10*time.Millisecond {
+		cleanupInterval = 10 * time.Millisecond // Minimum interval
+	}
+	if cleanupInterval > 1*time.Minute {
+		cleanupInterval = 1 * time.Minute // Maximum interval
+	}
+
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.stopCleanup:
+			// Cache cleared or being destroyed, stop cleanup
+			return
+
+		case <-ticker.C:
+			// Perform cleanup sweep
+			now := c.timeProvider.Now()
+			deletedCount := 0
+
+			c.negativeCache.Range(func(key, value interface{}) bool {
+				neg, ok := value.(negativeEntry)
+				if !ok {
+					// Invalid entry, delete it
+					c.negativeCache.Delete(key)
+					deletedCount++
+					return true
+				}
+
+				// Check if expired
+				if now > neg.expireAt {
+					c.negativeCache.Delete(key)
+					deletedCount++
+				}
+
+				return true // Continue iteration
+			})
+
+			// Optional: log cleanup activity for debugging
+			// This can be removed in production or controlled by a debug flag
+			if deletedCount > 0 {
+				// Silent cleanup - consider adding debug logging here if needed
+				_ = deletedCount
+			}
+		}
+	}
 }
 
 // Stats returns cache statistics.
@@ -870,6 +993,10 @@ func (c *wtinyLFUCache) evictOne() {
 // This is a safety mechanism to handle race conditions in concurrent Set operations
 // Uses a limited scan around the hash position for performance
 func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntry *entry) {
+	// CRITICAL FIX for issue #3: Add retry logic to handle state transitions
+	// during high contention. Without retries, CAS failures can leave duplicates.
+	const maxRetries = 3 // Try up to 3 times per entry
+
 	// Scan a limited range around the original hash position
 	startIdx := keyHash & uint64(c.tableMask)
 
@@ -889,23 +1016,48 @@ func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntr
 			continue
 		}
 
-		// Check if this entry has the same key
-		state := atomic.LoadInt32(&entry.valid)
-		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
-			// Double-check the actual key to avoid hash collisions
-			if storedKey := entry.loadKey(); storedKey == key {
-				// Found a duplicate - remove it atomically using entryPending
-				// This prevents races with concurrent reads/writes
-				if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
-					// Now we own the entry exclusively, clear it atomically
-					entry.storeKey("")
-					atomic.StoreUint64(&entry.keyHash, 0)
+		// Try to remove duplicate with retry logic
+		for retry := 0; retry < maxRetries; retry++ {
+			// Check if this entry has the same key
+			state := atomic.LoadInt32(&entry.valid)
 
-					// Mark as deleted (final state)
-					atomic.StoreInt32(&entry.valid, entryDeleted)
-					atomic.AddInt64(&c.size, -1)
-					// Note: we don't increment evictions counter as this is a cleanup operation
-				}
+			// If not valid, no need to check further
+			if state != entryValid {
+				break
+			}
+
+			// Check hash match
+			if atomic.LoadUint64(&entry.keyHash) != keyHash {
+				break
+			}
+
+			// Double-check the actual key to avoid hash collisions
+			storedKey := entry.loadKey()
+			if storedKey != key {
+				break
+			}
+
+			// Found a duplicate - try to remove it atomically
+			// CAS from entryValid to entryPending for exclusive access
+			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
+				// Successfully acquired exclusive access, clear it
+				entry.storeKey("")
+				atomic.StoreUint64(&entry.keyHash, 0)
+
+				// Mark as deleted (final state)
+				atomic.StoreInt32(&entry.valid, entryDeleted)
+				atomic.AddInt64(&c.size, -1)
+				// Note: we don't increment evictions counter as this is a cleanup operation
+
+				// Successfully removed, break retry loop
+				break
+			}
+
+			// CAS failed - state changed between load and CAS
+			// Retry to check new state (might have been deleted by another thread)
+			// Small yield to reduce contention before retry
+			if retry < maxRetries-1 {
+				runtime.Gosched()
 			}
 		}
 	}

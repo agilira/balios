@@ -18,10 +18,14 @@ import (
 // inflightCall represents an in-flight loader call with its waitgroup and result.
 // Uses atomic.Value for race-free access to val and err fields.
 // Note: atomic.Value cannot store nil, so we use wrapper types.
+//
+// done channel is closed when the loader completes, allowing efficient
+// broadcast to multiple waiters without spawning goroutines per waiter.
 type inflightCall struct {
-	wg  sync.WaitGroup
-	val atomic.Value // stores *resultWrapper
-	err atomic.Value // stores *errorWrapper
+	wg   sync.WaitGroup
+	val  atomic.Value  // stores *resultWrapper
+	err  atomic.Value  // stores *errorWrapper
+	done chan struct{} // closed when loader completes (broadcast to all waiters)
 }
 
 // resultWrapper wraps a value to allow storing nil in atomic.Value
@@ -97,7 +101,9 @@ func (c *wtinyLFUCache) GetOrLoad(key string, loader func() (interface{}, error)
 	callKey := "load:" + key
 
 	// Create and initialize flight BEFORE putting it in map
-	newFlight := &inflightCall{}
+	newFlight := &inflightCall{
+		done: make(chan struct{}), // Broadcast channel for completion
+	}
 	newFlight.wg.Add(1) // Initialize WaitGroup before any other goroutine can see it
 
 	actual, loaded := c.inflight.LoadOrStore(callKey, newFlight)
@@ -117,6 +123,8 @@ func (c *wtinyLFUCache) GetOrLoad(key string, loader func() (interface{}, error)
 
 	// We are the first (we inserted newFlight), execute the loader
 	defer func() {
+		// CRITICAL: Close done channel FIRST to broadcast to waiters
+		close(flight.done)
 		flight.wg.Done()
 		c.inflight.Delete(callKey) // Cleanup from per-cache map
 	}()
@@ -213,23 +221,32 @@ func (c *wtinyLFUCache) GetOrLoadWithContext(ctx context.Context, key string, lo
 	callKey := "load:" + key
 
 	// Create and initialize flight BEFORE putting it in map
-	newFlight := &inflightCall{}
+	newFlight := &inflightCall{
+		done: make(chan struct{}), // Broadcast channel for completion
+	}
 	newFlight.wg.Add(1) // Initialize WaitGroup before any other goroutine can see it
 
 	actual, loaded := c.inflight.LoadOrStore(callKey, newFlight)
 	flight := actual.(*inflightCall)
 
 	if loaded {
-		// Another goroutine is loading, wait with context
+		// Another goroutine is loading, wait with context awareness
 		// The WaitGroup was already initialized by the first goroutine
-		done := make(chan struct{})
-		go func() {
-			flight.wg.Wait()
-			close(done)
-		}()
+
+		// OPTIMIZATION: Check context BEFORE waiting
+		// If already cancelled, return immediately without entering select
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		// CRITICAL FIX for goroutine leak (#1 from code review):
+		// Instead of creating a goroutine per waiter, we use the done channel
+		// that the loader will close when complete. This allows all waiters
+		// to efficiently wait using select without creating goroutines.
 
 		select {
-		case <-done:
+		case <-flight.done:
+			// Loader completed, read results
 			valWrapper, _ := flight.val.Load().(*resultWrapper)
 			errWrapper, _ := flight.err.Load().(*errorWrapper)
 			if valWrapper != nil && errWrapper != nil {
@@ -237,12 +254,16 @@ func (c *wtinyLFUCache) GetOrLoadWithContext(ctx context.Context, key string, lo
 			}
 			return nil, nil // Should never happen
 		case <-ctx.Done():
+			// Context timeout/cancellation - return immediately without waiting
+			// The loader will still complete, but we don't wait for it
 			return nil, ctx.Err()
 		}
 	}
 
 	// We are the first (we inserted newFlight), execute the loader
 	defer func() {
+		// CRITICAL: Close done channel FIRST to broadcast to waiters
+		close(flight.done)
 		flight.wg.Done()
 		c.inflight.Delete(callKey) // Cleanup from per-cache map
 	}()

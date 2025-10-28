@@ -247,10 +247,10 @@ function Invoke-Fuzz {
         Write-ColorOutput "Running $test..." $Yellow
         go test -fuzz=$test -fuzztime=30s
         if ($LASTEXITCODE -ne 0) {
-            Write-ColorOutput "❌ $test failed!" $Red
+            Write-ColorOutput "[X] $test failed!" $Red
             exit $LASTEXITCODE
         }
-        Write-ColorOutput "✓ $test passed" $Green
+        Write-ColorOutput "[OK] $test passed" $Green
     }
     
     Write-ColorOutput "All fuzz tests completed successfully!" $Green
@@ -276,10 +276,10 @@ function Invoke-FuzzExtended {
         Write-ColorOutput "Running $test (5 minutes)..." $Yellow
         go test -fuzz=$test -fuzztime=5m
         if ($LASTEXITCODE -ne 0) {
-            Write-ColorOutput "❌ $test failed!" $Red
+            Write-ColorOutput "[X] $test failed!" $Red
             exit $LASTEXITCODE
         }
-        Write-ColorOutput "✓ $test passed" $Green
+        Write-ColorOutput "[OK] $test passed" $Green
     }
     
     Write-ColorOutput "All extended fuzz tests completed successfully!" $Green
@@ -315,22 +315,22 @@ function Invoke-All {
 function Invoke-Status {
     Write-ColorOutput "Development tools status:" $Blue
     
-    $staticcheckStatus = if (Test-ToolExists "staticcheck") { "✓ installed" } else { "✗ missing" }
+    $staticcheckStatus = if (Test-ToolExists "staticcheck") { "[OK] installed" } else { "[X] missing" }
     $staticcheckColor = if (Test-ToolExists "staticcheck") { $Green } else { $Red }
     Write-Host "staticcheck:  " -NoNewline
     Write-ColorOutput $staticcheckStatus $staticcheckColor
     
-    $errcheckStatus = if (Test-ToolExists "errcheck") { "✓ installed" } else { "✗ missing" }
+    $errcheckStatus = if (Test-ToolExists "errcheck") { "[OK] installed" } else { "[X] missing" }
     $errcheckColor = if (Test-ToolExists "errcheck") { $Green } else { $Red }
     Write-Host "errcheck:     " -NoNewline
     Write-ColorOutput $errcheckStatus $errcheckColor
     
-    $gosecStatus = if (Test-ToolExists "gosec") { "✓ installed" } else { "✗ missing" }
+    $gosecStatus = if (Test-ToolExists "gosec") { "[OK] installed" } else { "[X] missing" }
     $gosecColor = if (Test-ToolExists "gosec") { $Green } else { $Red }
     Write-Host "gosec:        " -NoNewline
     Write-ColorOutput $gosecStatus $gosecColor
     
-    $govulncheckStatus = if (Test-ToolExists "govulncheck") { "✓ installed" } else { "✗ missing" }
+    $govulncheckStatus = if (Test-ToolExists "govulncheck") { "[OK] installed" } else { "[X] missing" }
     $govulncheckColor = if (Test-ToolExists "govulncheck") { $Green } else { $Red }
     Write-Host "govulncheck:  " -NoNewline
     Write-ColorOutput $govulncheckStatus $govulncheckColor

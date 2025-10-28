@@ -7,6 +7,7 @@
 // Copyright (c) 2025 AGILira - A. Giordano
 // Series: an AGILira library
 // SPDX-License-Identifier: MPL-2.0
+
 package balios
 
 import (
@@ -239,7 +240,7 @@ func (c *wtinyLFUCache) GetOrLoadWithContext(ctx context.Context, key string, lo
 			return nil, err
 		}
 
-		// CRITICAL FIX for goroutine leak (#1 from code review):
+		// IMPORTANT FIX for goroutine leak (#1 from code review):
 		// Instead of creating a goroutine per waiter, we use the done channel
 		// that the loader will close when complete. This allows all waiters
 		// to efficiently wait using select without creating goroutines.

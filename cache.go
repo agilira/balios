@@ -468,33 +468,38 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		}
 	}
 
-	// FALLBACK: If we've probed maxProbeLength slots without finding a spot,
-	// the cache is highly loaded or we hit a large cluster.
-	//
-	// IMPORTANT: Before evicting, check if this is an update to existing key
-	// that we just couldn't find due to clustering. If so, we must NOT evict
-	// because we might remove the very key we're trying to update!
-	//
-	// Do one more full scan to verify the key doesn't exist anywhere.
-	keyExists := false
+	// FALLBACK: Max probes reached. Do full table scan to find the key.
+	// Under high contention (100 goroutines updating same key), the key may
+	// exist far beyond maxProbeLength due to concurrent insertions.
 	for i := uint32(0); i < uint32(len(c.entries)); i++ {
 		entry := &c.entries[i]
 		state := atomic.LoadInt32(&entry.valid)
+
 		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
 			if storedKey := entry.loadKey(); storedKey == key {
-				keyExists = true
-				break
+				// Found it! Update in-place
+				if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
+					holder := &valueHolder{}
+					holder.data.Store(value)
+					entry.value.Store(holder)
+					atomic.StoreInt64(&entry.expireAt, expireAt)
+					atomic.StoreInt32(&entry.valid, entryValid)
+					atomic.AddInt64(&c.sets, 1)
+
+					if c.metricsCollector != nil {
+						latency := c.timeProvider.Now() - now
+						c.metricsCollector.RecordSet(latency)
+					}
+					return true
+				}
 			}
 		}
 	}
 
-	// Only evict if this is a new key insertion, not an update
-	if !keyExists {
-		c.evictOne()
-	}
+	// Key doesn't exist. Try eviction to make space for new insertion.
+	c.evictOne()
 
-	// After verification/eviction, retry the Set operation (should succeed now)
-	// We don't recurse to avoid stack issues; instead we do one retry inline
+	// Retry bounded probing after eviction
 	for i := uint32(0); i <= effectiveMaxProbes; i++ {
 		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
 
@@ -529,8 +534,7 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		}
 	}
 
-	// If still no slot after eviction, cache is in extreme contention
-	// Return false to signal caller (extremely rare, < 0.0001% cases)
+	// Extreme contention - return false
 	return false
 }
 

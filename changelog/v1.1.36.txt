@@ -1,9 +1,15 @@
-v1.1.36 - 2025-01-29
+v1.1.36 - 2025-10-29
 
-BUG FIX:
+BUG FIXES:
 - Fixed race condition in bounded probing fallback under extreme concurrency
   - When 100+ goroutines update same key, bounded probing (128 slots) may not find it
-  - Added full table scan before eviction to check if key exists anywhere
-  - If key found beyond probe limit, update in-place instead of evicting
+  - Added full table scan with retry logic (up to 5 attempts) when key exists beyond probe limit
+  - If key found, update in-place instead of evicting
+  - Added runtime.Gosched() on CAS failures to reduce contention
   - Prevents key loss during high-contention concurrent updates
   - All security tests now pass including TestSecurity_RaceConditionAttacks
+
+- Clarified Has() TTL behavior in documentation
+  - Has() correctly checks TTL and returns false for expired entries
+  - Added complete test coverage for Has() with TTL
+  - Updated interface documentation to explicitly mention TTL behavior

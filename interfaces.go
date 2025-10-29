@@ -31,6 +31,7 @@ type Cache interface {
 	Delete(key string) bool
 
 	// Has checks if a key exists in the cache without retrieving the value.
+	// Returns false if the key does not exist or has expired (when TTL is enabled).
 	// This method should be faster than Get when only existence matters.
 	Has(key string) bool
 

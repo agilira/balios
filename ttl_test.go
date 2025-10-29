@@ -182,8 +182,13 @@ func TestCache_TTL_Has(t *testing.T) {
 	// Advance past expiration
 	mockTime.Advance(110 * time.Millisecond)
 
-	// Has should also respect TTL
-	// Note: Current Has() implementation doesn't check TTL
-	// This test documents the behavior
-	// TODO: Consider if Has() should check TTL
+	// Has() should respect TTL (returns false for expired entries)
+	if cache.Has("key") {
+		t.Error("expected key to be expired and return false from Has()")
+	}
+
+	// Verify Get() also returns false for consistency
+	if _, ok := cache.Get("key"); ok {
+		t.Error("expected key to be expired and return false from Get()")
+	}
 }

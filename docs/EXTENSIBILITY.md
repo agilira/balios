@@ -205,6 +205,57 @@ if err := persistCache.Load(); err != nil {
 
 ---
 
+### `balios-batch` - Batch Operations
+
+**Purpose**: Efficient batch operations for bulk data processing and high-throughput scenarios.
+
+**Use Case**: Data pipelines, bulk imports, high-frequency trading, ETL processes where multiple cache operations need to be performed together.
+
+**Tradeoffs**:
+- ✅ Performance: Reduced overhead for bulk operations
+- ✅ Atomicity: Batch operations can be more atomic
+- ✅ Efficiency: Optimized for high-throughput scenarios
+- ❌ Complexity: Additional coordination logic
+- ❌ Memory: Temporary storage for batch operations
+
+**Example API**:
+```go
+import "github.com/agilira/balios-batch"
+
+// Wrap cache with batch operations
+batchCache := baliosbatch.Wrap(cache, baliosbatch.Config{
+    MaxBatchSize:    1000,
+    FlushInterval:   10 * time.Millisecond,
+    AutoFlush:       true,
+    Metrics:         true,
+})
+
+// Batch operations
+keys := []string{"key1", "key2", "key3"}
+values := []interface{}{"value1", "value2", "value3"}
+
+// Set multiple keys at once
+count := batchCache.SetBatch(keys, values)
+
+// Get multiple keys at once
+results := batchCache.GetBatch(keys)
+
+// Delete multiple keys at once
+deleted := batchCache.DeleteBatch(keys)
+
+// Manual flush for immediate processing
+batchCache.Flush()
+```
+
+**Implementation Notes**:
+- Buffers operations until batch size or timeout reached
+- Optimized hash calculation and linear probing for batch
+- Configurable batch size and flush intervals
+- Metrics integration for batch performance
+- Graceful degradation to individual operations on errors
+
+---
+
 ### `balios-replicated` - Multi-Node Replication
 
 **Purpose**: Synchronize cache state across multiple nodes in a distributed system.
@@ -342,6 +393,7 @@ Wrapper packages can evolve independently and may have different version numbers
 - [ ] `balios-bg` - Background cleanup wrapper
 - [ ] `balios-sliding` - Sliding window TTL wrapper
 - [ ] `balios-adaptive` - Adaptive expiration wrapper
+- [ ] `balios-batch` - Batch operations wrapper
 - [ ] `balios-persist` - Persistence layer wrapper
 - [ ] `balios-replicated` - Multi-node replication wrapper
 - [ ] Wrapper performance comparison benchmarks

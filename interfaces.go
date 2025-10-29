@@ -6,7 +6,10 @@
 
 package balios
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Cache represents a high-performance in-memory cache interface.
 // All methods must be safe for concurrent use.
@@ -25,6 +28,12 @@ type Cache interface {
 	//
 	// This method must be zero-allocation on the hot path.
 	Set(key string, value interface{}) bool
+
+	// SetWithTTL stores a key-value pair with a specific TTL using lock-free operations.
+	// The TTL overrides the cache's default TTL for this specific key.
+	// Returns true if the key was successfully stored, false otherwise.
+	// If ttl is zero or negative, the key will not expire.
+	SetWithTTL(key string, value interface{}, ttl time.Duration) bool
 
 	// Delete removes an item from the cache.
 	// Returns true if the item was present and removed.
@@ -194,6 +203,45 @@ type MetricsCollector interface {
 	// RecordExpiration records a cache expiration event.
 	// Called when an entry is expired due to TTL.
 	RecordExpiration()
+
+	// RecordProbeCount records the number of probes performed during an operation.
+	// probeCount is the number of slots checked during linear probing.
+	// operation is the type of operation: "get", "set", "delete", "has"
+	RecordProbeCount(probeCount int, operation string)
+
+	// RecordFallbackScan records when a fallback to full table scan is performed.
+	// This happens when normal probing fails to find a slot or key.
+	// scanSize is the number of entries scanned.
+	RecordFallbackScan(scanSize int, operation string)
+
+	// RecordDuplicateCleanup records when duplicate key cleanup is performed.
+	// duplicatesFound is the number of duplicate entries found and removed.
+	RecordDuplicateCleanup(duplicatesFound int)
+
+	// RecordRaceCondition records when a race condition is detected and handled.
+	// This helps monitor the health of the lock-free implementation.
+	// operation is the type of operation where the race occurred.
+	RecordRaceCondition(operation string)
+
+	// RecordEvictionSampling records eviction sampling statistics.
+	// sampleSize is the number of entries sampled.
+	// victimFound indicates if a victim was found in the sample.
+	RecordEvictionSampling(sampleSize int, victimFound bool)
+
+	// RecordMemoryPressure records memory pressure events.
+	// This helps monitor cache efficiency and memory usage.
+	// pressureLevel is a value from 0-100 indicating memory pressure level.
+	RecordMemoryPressure(pressureLevel int)
+
+	// RecordKeyAccess records access to a specific key for analytics.
+	// This enables per-key statistics without impacting performance.
+	// key is the cache key, operation is "get", "set", "delete", "has"
+	RecordKeyAccess(key string, operation string)
+
+	// RecordKeyFrequency records the frequency of a key for analytics.
+	// This helps analyze access patterns without impacting performance.
+	// key is the cache key, frequency is the current frequency count
+	RecordKeyFrequency(key string, frequency uint64)
 }
 
 // NoOpMetricsCollector is a metrics collector that does nothing.
@@ -215,3 +263,27 @@ func (NoOpMetricsCollector) RecordEviction() {}
 
 // RecordExpiration does nothing. Inlined by compiler.
 func (NoOpMetricsCollector) RecordExpiration() {}
+
+// RecordProbeCount does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordProbeCount(probeCount int, operation string) {}
+
+// RecordFallbackScan does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordFallbackScan(scanSize int, operation string) {}
+
+// RecordDuplicateCleanup does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordDuplicateCleanup(duplicatesFound int) {}
+
+// RecordRaceCondition does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordRaceCondition(operation string) {}
+
+// RecordEvictionSampling does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordEvictionSampling(sampleSize int, victimFound bool) {}
+
+// RecordMemoryPressure does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordMemoryPressure(pressureLevel int) {}
+
+// RecordKeyAccess does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordKeyAccess(key string, operation string) {}
+
+// RecordKeyFrequency does nothing. Inlined by compiler.
+func (NoOpMetricsCollector) RecordKeyFrequency(key string, frequency uint64) {}

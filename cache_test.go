@@ -8,7 +8,9 @@ package balios
 
 import (
 	"strconv"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestNewCache(t *testing.T) {
@@ -318,5 +320,163 @@ func BenchmarkCache_Get_SingleThread(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key := strconv.Itoa(i % 1000)
 		cache.Get(key)
+	}
+}
+
+// =============================================================================
+// HELPER FUNCTIONS TESTS
+// =============================================================================
+
+func TestCalculateExpiration(t *testing.T) {
+	// Test with TTL enabled
+	cache := NewCache(Config{MaxSize: 100, TTL: 100 * time.Millisecond}).(*wtinyLFUCache)
+	now := int64(1000000000)
+	expireAt := cache.calculateExpiration(now)
+	expected := now + int64(100*time.Millisecond)
+	if expireAt != expected {
+		t.Errorf("Expected %d, got %d", expected, expireAt)
+	}
+
+	// Test with TTL disabled
+	cacheNoTTL := NewCache(Config{MaxSize: 100}).(*wtinyLFUCache)
+	expireAt = cacheNoTTL.calculateExpiration(now)
+	if expireAt != 0 {
+		t.Errorf("Expected 0, got %d", expireAt)
+	}
+
+	// Test with zero time
+	expireAt = cache.calculateExpiration(0)
+	if expireAt != 0 {
+		t.Errorf("Expected 0 for zero time, got %d", expireAt)
+	}
+}
+
+func TestCalculateEffectiveMaxProbes(t *testing.T) {
+	// Test with small cache
+	cache := NewCache(Config{MaxSize: 10}).(*wtinyLFUCache)
+	probes := cache.calculateEffectiveMaxProbes()
+	// For MaxSize=10, tableSize=32 (nextPowerOf2(10*2)), tableMask=31, so min(128, 31) = 31
+	if probes != 31 {
+		t.Errorf("Expected 31, got %d", probes)
+	}
+
+	// Test with large cache
+	cacheLarge := NewCache(Config{MaxSize: 10000}).(*wtinyLFUCache)
+	probes = cacheLarge.calculateEffectiveMaxProbes()
+	if probes != 128 { // maxProbeLength
+		t.Errorf("Expected 128, got %d", probes)
+	}
+}
+
+func TestCalculateStartIndex(t *testing.T) {
+	cache := NewCache(Config{MaxSize: 100}).(*wtinyLFUCache)
+	keyHash := uint64(0x123456789ABCDEF0)
+	startIdx := cache.calculateStartIndex(keyHash)
+	expected := keyHash & uint64(cache.tableMask)
+	if startIdx != expected {
+		t.Errorf("Expected %d, got %d", expected, startIdx)
+	}
+}
+
+func TestValidateKey(t *testing.T) {
+	cache := NewCache(Config{MaxSize: 100}).(*wtinyLFUCache)
+
+	// Test valid key
+	if !cache.validateKey("valid_key") {
+		t.Error("Expected valid key to return true")
+	}
+
+	// Test empty key
+	if cache.validateKey("") {
+		t.Error("Expected empty key to return false")
+	}
+
+	// Test non-empty key
+	if !cache.validateKey("a") {
+		t.Error("Expected single char key to return true")
+	}
+}
+
+func TestShouldSkipEntry(t *testing.T) {
+	cache := NewCache(Config{MaxSize: 100}).(*wtinyLFUCache)
+
+	// Test pending entry
+	if !cache.shouldSkipEntry(entryPending) {
+		t.Error("Expected pending entry to be skipped")
+	}
+
+	// Test non-pending entries
+	if cache.shouldSkipEntry(entryEmpty) {
+		t.Error("Expected empty entry to not be skipped")
+	}
+	if cache.shouldSkipEntry(entryValid) {
+		t.Error("Expected valid entry to not be skipped")
+	}
+	if cache.shouldSkipEntry(entryDeleted) {
+		t.Error("Expected deleted entry to not be skipped")
+	}
+}
+
+func TestIsSlotAvailable(t *testing.T) {
+	cache := NewCache(Config{MaxSize: 100}).(*wtinyLFUCache)
+
+	// Test available slots
+	if !cache.isSlotAvailable(entryEmpty) {
+		t.Error("Expected empty slot to be available")
+	}
+	if !cache.isSlotAvailable(entryDeleted) {
+		t.Error("Expected deleted slot to be available")
+	}
+
+	// Test unavailable slots
+	if cache.isSlotAvailable(entryValid) {
+		t.Error("Expected valid slot to not be available")
+	}
+	if cache.isSlotAvailable(entryPending) {
+		t.Error("Expected pending slot to not be available")
+	}
+}
+
+func TestAttemptExpiredCleanup(t *testing.T) {
+	// Create cache with short TTL
+	cache := NewCache(Config{
+		MaxSize: 100,
+		TTL:     50 * time.Millisecond,
+	}).(*wtinyLFUCache)
+
+	// Set a value
+	cache.Set("key1", "value1")
+
+	// Wait for expiration
+	time.Sleep(100 * time.Millisecond)
+
+	// Find the entry (this is a bit hacky but necessary for testing)
+	var targetEntry *entry
+	for i := range cache.entries {
+		entry := &cache.entries[i]
+		if atomic.LoadInt32(&entry.valid) == entryValid {
+			if key := entry.loadKey(); key == "key1" {
+				targetEntry = entry
+				break
+			}
+		}
+	}
+
+	if targetEntry == nil {
+		t.Fatal("Could not find target entry")
+	}
+
+	// Test cleanup
+	now := cache.timeProvider.Now()
+	cleaned := cache.attemptExpiredCleanup(targetEntry, now)
+
+	if !cleaned {
+		t.Error("Expected expired entry to be cleaned up")
+	}
+
+	// Verify entry is now deleted
+	state := atomic.LoadInt32(&targetEntry.valid)
+	if state != entryDeleted {
+		t.Errorf("Expected entry to be deleted, got state %d", state)
 	}
 }

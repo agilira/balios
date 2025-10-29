@@ -96,6 +96,46 @@ type MetricsCollector interface {
 
     // RecordEviction records an eviction event.
     RecordEviction()
+
+    // RecordExpiration records a cache expiration event.
+    RecordExpiration()
+
+    // RecordProbeCount records the number of probes performed during an operation.
+    // probeCount: Number of slots checked during linear probing
+    // operation: Type of operation ("get", "set", "delete", "has")
+    RecordProbeCount(probeCount int, operation string)
+
+    // RecordFallbackScan records when a fallback to full table scan is performed.
+    // scanSize: Number of entries scanned
+    // operation: Type of operation where fallback occurred
+    RecordFallbackScan(scanSize int, operation string)
+
+    // RecordDuplicateCleanup records when duplicate key cleanup is performed.
+    // duplicatesFound: Number of duplicate entries found and removed
+    RecordDuplicateCleanup(duplicatesFound int)
+
+    // RecordRaceCondition records when a race condition is detected and handled.
+    // operation: Type of operation where the race occurred
+    RecordRaceCondition(operation string)
+
+    // RecordEvictionSampling records eviction sampling statistics.
+    // sampleSize: Number of entries sampled
+    // victimFound: Whether a victim was found in the sample
+    RecordEvictionSampling(sampleSize int, victimFound bool)
+
+    // RecordMemoryPressure records memory pressure events.
+    // pressureLevel: Value from 0-100 indicating memory pressure level
+    RecordMemoryPressure(pressureLevel int)
+
+    // RecordKeyAccess records access to a specific key for analytics.
+    // key: The cache key
+    // operation: Type of operation ("get", "set", "delete", "has")
+    RecordKeyAccess(key string, operation string)
+
+    // RecordKeyFrequency records the frequency of a key for analytics.
+    // key: The cache key
+    // frequency: Current frequency count
+    RecordKeyFrequency(key string, frequency uint64)
 }
 ```
 
@@ -285,6 +325,73 @@ rate(balios_get_misses_total[1m])
 - Cache size too small for workload
 - Poor key distribution (hot keys causing frequent evictions)
 - TTL too aggressive
+
+### Advanced Metrics
+
+#### `balios_probe_count`
+
+**Type**: Int64Histogram  
+**Description**: Number of probes performed during operations
+
+**Typical Values**:
+- p50: 1-3 probes (normal case)
+- p95: 5-10 probes (some contention)
+- p99: 10-20 probes (high contention)
+
+**High Probe Count Indicates**:
+- High cache load factor (>80%)
+- Poor hash distribution
+- Many concurrent operations
+
+#### `balios_fallback_scans_total`
+
+**Type**: Int64Counter  
+**Description**: Number of fallback full table scans performed
+
+**High Fallback Rate Indicates**:
+- Extreme contention (many goroutines updating same keys)
+- Cache size too small relative to concurrency
+- Hash collisions
+
+#### `balios_duplicate_cleanups_total`
+
+**Type**: Int64Counter  
+**Description**: Number of duplicate key cleanups performed
+
+**High Cleanup Rate Indicates**:
+- Race conditions in concurrent Set operations
+- High contention on same keys
+- Potential application logic issues
+
+#### `balios_race_conditions_total`
+
+**Type**: Int64Counter  
+**Description**: Number of race conditions detected and handled
+
+**Non-Zero Values Indicate**:
+- High concurrency on same keys
+- Potential application design issues
+- Need for better key distribution
+
+#### `balios_key_access_total`
+
+**Type**: Int64Counter  
+**Description**: Per-key access tracking (when enabled)
+
+**Use Cases**:
+- Identify hot keys
+- Analyze access patterns
+- Debug specific key issues
+
+#### `balios_key_frequency`
+
+**Type**: Int64Histogram  
+**Description**: Frequency distribution of keys
+
+**Use Cases**:
+- Understand access patterns
+- Optimize eviction policy
+- Identify key distribution issues
 
 ## Monitoring Examples
 

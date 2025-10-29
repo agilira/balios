@@ -25,6 +25,16 @@ func TestNoOpMetricsCollector(t *testing.T) {
 	collector.RecordSet(150)
 	collector.RecordDelete(50)
 	collector.RecordEviction()
+	collector.RecordExpiration()
+
+	// Test new metrics
+	collector.RecordProbeCount(5, "get")
+	collector.RecordProbeCount(3, "set")
+	collector.RecordFallbackScan(1000, "set")
+	collector.RecordDuplicateCleanup(2)
+	collector.RecordRaceCondition("set")
+	collector.RecordEvictionSampling(8, true)
+	collector.RecordMemoryPressure(75)
 
 	// No assertions - just verifying it doesn't panic
 }
@@ -44,6 +54,15 @@ func TestNoOpMetricsCollector_Concurrent(t *testing.T) {
 				collector.RecordSet(int64(j))
 				collector.RecordDelete(int64(j))
 				collector.RecordEviction()
+				collector.RecordExpiration()
+
+				// Test new metrics
+				collector.RecordProbeCount(j%10, "get")
+				collector.RecordFallbackScan(j*10, "set")
+				collector.RecordDuplicateCleanup(j % 3)
+				collector.RecordRaceCondition("set")
+				collector.RecordEvictionSampling(8, j%2 == 0)
+				collector.RecordMemoryPressure(j % 100)
 			}
 		}()
 	}
@@ -66,6 +85,19 @@ type mockMetricsCollector struct {
 
 	hitCount  int
 	missCount int
+
+	// New metrics
+	probeCounts        []int
+	probeOperations    []string
+	fallbackScans      []int
+	fallbackOperations []string
+	duplicateCleanups  []int
+	raceConditions     []string
+	evictionSamplings  []struct {
+		sampleSize  int
+		victimFound bool
+	}
+	memoryPressures []int
 }
 
 func (m *mockMetricsCollector) RecordGet(latencyNs int64, hit bool) {
@@ -110,6 +142,67 @@ func (m *mockMetricsCollector) RecordExpiration() {
 	defer m.mu.Unlock()
 
 	// Track expirations if needed for testing
+}
+
+func (m *mockMetricsCollector) RecordProbeCount(probeCount int, operation string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.probeCounts = append(m.probeCounts, probeCount)
+	m.probeOperations = append(m.probeOperations, operation)
+}
+
+func (m *mockMetricsCollector) RecordFallbackScan(scanSize int, operation string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.fallbackScans = append(m.fallbackScans, scanSize)
+	m.fallbackOperations = append(m.fallbackOperations, operation)
+}
+
+func (m *mockMetricsCollector) RecordDuplicateCleanup(duplicatesFound int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.duplicateCleanups = append(m.duplicateCleanups, duplicatesFound)
+}
+
+func (m *mockMetricsCollector) RecordRaceCondition(operation string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.raceConditions = append(m.raceConditions, operation)
+}
+
+func (m *mockMetricsCollector) RecordEvictionSampling(sampleSize int, victimFound bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.evictionSamplings = append(m.evictionSamplings, struct {
+		sampleSize  int
+		victimFound bool
+	}{sampleSize, victimFound})
+}
+
+func (m *mockMetricsCollector) RecordMemoryPressure(pressureLevel int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.memoryPressures = append(m.memoryPressures, pressureLevel)
+}
+
+func (m *mockMetricsCollector) RecordKeyAccess(key string, operation string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Track key access if needed for testing
+}
+
+func (m *mockMetricsCollector) RecordKeyFrequency(key string, frequency uint64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Track key frequency if needed for testing
 }
 
 // TestMockMetricsCollector verifies our test implementation works correctly
@@ -404,6 +497,38 @@ func (a *atomicMetricsCollector) RecordExpiration() {
 	// Not tracked in this test
 }
 
+func (a *atomicMetricsCollector) RecordProbeCount(probeCount int, operation string) {
+	// Not tracked in this test
+}
+
+func (a *atomicMetricsCollector) RecordFallbackScan(scanSize int, operation string) {
+	// Not tracked in this test
+}
+
+func (a *atomicMetricsCollector) RecordDuplicateCleanup(duplicatesFound int) {
+	// Not tracked in this test
+}
+
+func (a *atomicMetricsCollector) RecordRaceCondition(operation string) {
+	// Not tracked in this test
+}
+
+func (a *atomicMetricsCollector) RecordEvictionSampling(sampleSize int, victimFound bool) {
+	// Not tracked in this test
+}
+
+func (a *atomicMetricsCollector) RecordMemoryPressure(pressureLevel int) {
+	// Not tracked in this test
+}
+
+func (a *atomicMetricsCollector) RecordKeyAccess(key string, operation string) {
+	// Not tracked in this test
+}
+
+func (a *atomicMetricsCollector) RecordKeyFrequency(key string, frequency uint64) {
+	// Not tracked in this test
+}
+
 // medianDuration calculates the median of a slice of durations.
 // This is more robust than mean for filtering out outliers in performance tests.
 func medianDuration(durations []time.Duration) time.Duration {
@@ -428,4 +553,62 @@ func medianDuration(durations []time.Duration) time.Duration {
 	}
 	// Odd number of elements: middle element
 	return sorted[mid]
+}
+
+// TestNewMetrics verifies that the new metrics are properly recorded
+func TestNewMetrics(t *testing.T) {
+	collector := &mockMetricsCollector{}
+
+	// Test probe count metrics
+	collector.RecordProbeCount(5, "get")
+	collector.RecordProbeCount(3, "set")
+	collector.RecordProbeCount(7, "delete")
+
+	if len(collector.probeCounts) != 3 {
+		t.Errorf("Expected 3 probe count records, got %d", len(collector.probeCounts))
+	}
+
+	if collector.probeCounts[0] != 5 || collector.probeOperations[0] != "get" {
+		t.Errorf("Expected probe count 5 for 'get', got %d for '%s'", collector.probeCounts[0], collector.probeOperations[0])
+	}
+
+	// Test fallback scan metrics
+	collector.RecordFallbackScan(1000, "set")
+	collector.RecordFallbackScan(500, "get")
+
+	if len(collector.fallbackScans) != 2 {
+		t.Errorf("Expected 2 fallback scan records, got %d", len(collector.fallbackScans))
+	}
+
+	// Test duplicate cleanup metrics
+	collector.RecordDuplicateCleanup(2)
+	collector.RecordDuplicateCleanup(1)
+
+	if len(collector.duplicateCleanups) != 2 {
+		t.Errorf("Expected 2 duplicate cleanup records, got %d", len(collector.duplicateCleanups))
+	}
+
+	// Test race condition metrics
+	collector.RecordRaceCondition("set")
+	collector.RecordRaceCondition("get")
+
+	if len(collector.raceConditions) != 2 {
+		t.Errorf("Expected 2 race condition records, got %d", len(collector.raceConditions))
+	}
+
+	// Test eviction sampling metrics
+	collector.RecordEvictionSampling(8, true)
+	collector.RecordEvictionSampling(12, false)
+
+	if len(collector.evictionSamplings) != 2 {
+		t.Errorf("Expected 2 eviction sampling records, got %d", len(collector.evictionSamplings))
+	}
+
+	// Test memory pressure metrics
+	collector.RecordMemoryPressure(75)
+	collector.RecordMemoryPressure(90)
+
+	if len(collector.memoryPressures) != 2 {
+		t.Errorf("Expected 2 memory pressure records, got %d", len(collector.memoryPressures))
+	}
 }

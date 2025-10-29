@@ -369,7 +369,11 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		effectiveMaxProbes = c.tableMask
 	}
 
+	// Track probe count for metrics
+	probeCount := 0
+
 	for i := uint32(0); i <= effectiveMaxProbes; i++ {
+		probeCount++
 		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
 
 		// Safety check: ensure entries slice is not nil and idx is in bounds
@@ -390,20 +394,9 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		// OPPORTUNISTIC CLEANUP: If we encounter an expired entry during probing,
 		// clean it up immediately. This improves cache efficiency without extra goroutines.
 		// Zero overhead when TTL=0 (isExpired returns false immediately).
-		if state == entryValid && c.isExpired(entry, now) {
-			// Try to mark as deleted - if successful, we've cleaned up a slot
-			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
-				entry.storeKey("")
-				atomic.AddInt64(&c.size, -1)
-				atomic.AddInt64(&c.expirations, 1)
-				// Record expiration metrics
-				if c.metricsCollector != nil {
-					c.metricsCollector.RecordExpiration()
-				}
-				// Now this slot can be reused as entryDeleted
-				state = entryDeleted
-			}
-			// If CAS failed, another goroutine is handling it - continue probing
+		if state == entryValid && c.attemptExpiredCleanup(entry, now) {
+			// Cleanup was performed, slot is now available as entryDeleted
+			state = entryDeleted
 		}
 
 		if state == entryEmpty || state == entryDeleted {
@@ -420,7 +413,12 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 
 				// Critical: Check for duplicates to maintain cache consistency
 				// In high concurrency, multiple threads might create the same key
-				c.removeDuplicateKeys(key, keyHash, entry)
+				duplicatesFound := c.removeDuplicateKeys(key, keyHash, entry)
+
+				// Record duplicate cleanup metrics
+				if c.metricsCollector != nil && duplicatesFound > 0 {
+					c.metricsCollector.RecordDuplicateCleanup(duplicatesFound)
+				}
 
 				// Check if eviction needed AFTER incrementing size
 				currentSize := atomic.LoadInt64(&c.size)
@@ -468,12 +466,23 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 		}
 	}
 
+	// Record probe count metrics for normal probing
+	if c.metricsCollector != nil {
+		c.metricsCollector.RecordProbeCount(probeCount, "set")
+	}
+
 	// FALLBACK: Max probes reached. Do full table scan to find the key.
 	// Under high contention (100 goroutines updating same key), the key may
 	// exist far beyond maxProbeLength due to concurrent insertions.
 	//
 	// We retry multiple times if we find the key but CAS fails (extreme contention).
 	// If after retries we still don't find the key, we proceed with eviction + insertion.
+
+	// Record fallback scan metrics
+	if c.metricsCollector != nil {
+		c.metricsCollector.RecordFallbackScan(len(c.entries), "set")
+	}
+
 retryFullScan:
 	for retry := 0; retry < 5; retry++ {
 		for i := uint32(0); i < uint32(len(c.entries)); i++ {
@@ -537,6 +546,228 @@ retryFullScan:
 				}
 
 				c.removeDuplicateKeys(key, keyHash, entry)
+
+				currentSize := atomic.LoadInt64(&c.size)
+				if currentSize > int64(c.maxSize) {
+					c.evictOne()
+				}
+				return true
+			}
+		}
+	}
+
+	// Extreme contention - return false
+	return false
+}
+
+// SetWithTTL stores a key-value pair with a specific TTL using lock-free operations.
+// The TTL overrides the cache's default TTL for this specific key.
+func (c *wtinyLFUCache) SetWithTTL(key string, value interface{}, ttl time.Duration) bool {
+	// Validate key is not empty
+	if key == "" {
+		return false
+	}
+
+	// Get current time once at the start for both TTL and metrics (ensures consistency)
+	now := c.timeProvider.Now()
+
+	keyHash := stringHash(key)
+
+	// Update frequency sketch (lock-free)
+	c.sketch.increment(keyHash)
+
+	// Calculate expiration time with custom TTL
+	var expireAt int64
+	if ttl > 0 {
+		ttlNanos := int64(ttl)
+		if now > 0 {
+			// Protect against integer overflow
+			if now > (1<<63-1)-ttlNanos {
+				expireAt = 1<<63 - 1 // max int64
+			} else {
+				expireAt = now + ttlNanos
+			}
+		}
+	}
+
+	// Find slot using linear probing (bounded to prevent worst-case scenarios)
+	startIdx := keyHash & uint64(c.tableMask)
+
+	// Calculate effective max probes: min of maxProbeLength and table size
+	effectiveMaxProbes := maxProbeLength
+	if effectiveMaxProbes > c.tableMask {
+		effectiveMaxProbes = c.tableMask
+	}
+
+	// Track probe count for metrics
+	probeCount := 0
+
+	for i := uint32(0); i <= effectiveMaxProbes; i++ {
+		probeCount++
+		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
+
+		// Safety check: ensure entries slice is not nil and idx is in bounds
+		if c.entries == nil || idx >= uint64(len(c.entries)) {
+			return false
+		}
+
+		entry := &c.entries[idx]
+
+		// Load current state atomically
+		state := atomic.LoadInt32(&entry.valid)
+
+		// Skip entries being written/updated by other threads
+		if state == entryPending {
+			continue
+		}
+
+		// OPPORTUNISTIC CLEANUP: If we encounter an expired entry during probing,
+		// clean it up immediately. This improves cache efficiency without extra goroutines.
+		if state == entryValid && c.attemptExpiredCleanup(entry, now) {
+			// Cleanup was performed, slot is now available as entryDeleted
+			state = entryDeleted
+		}
+
+		if state == entryEmpty || state == entryDeleted {
+			// Try to claim this slot with entryPending first to prevent races
+			if atomic.CompareAndSwapInt32(&entry.valid, state, entryPending) {
+				// Successfully claimed - populate entry using helper
+				c.populateEntry(entry, key, keyHash, value, expireAt, state)
+
+				// Record metrics for successful Set
+				if c.metricsCollector != nil {
+					latency := c.timeProvider.Now() - now
+					c.metricsCollector.RecordSet(latency)
+					c.metricsCollector.RecordKeyAccess(key, "set")
+				}
+
+				// Critical: Check for duplicates to maintain cache consistency
+				duplicatesFound := c.removeDuplicateKeys(key, keyHash, entry)
+
+				// Record duplicate cleanup metrics
+				if c.metricsCollector != nil && duplicatesFound > 0 {
+					c.metricsCollector.RecordDuplicateCleanup(duplicatesFound)
+				}
+
+				// Check if eviction needed AFTER incrementing size
+				currentSize := atomic.LoadInt64(&c.size)
+				if currentSize > int64(c.maxSize) {
+					c.evictOne()
+				}
+				return true
+			}
+			// CAS failed, continue
+			continue
+		}
+
+		// Check if this is an update to existing key
+		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
+			// Try to acquire the entry for update by marking it as pending
+			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
+				// Check if this is really the same key (now safe to read)
+				if storedKey := entry.loadKey(); storedKey == key {
+					// UPDATE PATH: Always create new valueHolder to support type changes
+					newHolder := &valueHolder{}
+					newHolder.data.Store(value)
+					entry.value.Store(newHolder)
+					atomic.StoreInt64(&entry.expireAt, expireAt)
+
+					// Release the entry back to valid state
+					atomic.StoreInt32(&entry.valid, entryValid)
+					atomic.AddInt64(&c.sets, 1)
+
+					// Record metrics for successful Set (update)
+					if c.metricsCollector != nil {
+						latency := c.timeProvider.Now() - now
+						c.metricsCollector.RecordSet(latency)
+						c.metricsCollector.RecordKeyAccess(key, "set")
+					}
+					return true
+				}
+				// Wrong key, release and continue searching
+				atomic.StoreInt32(&entry.valid, entryValid)
+			}
+			// CAS failed or wrong key, continue
+			continue
+		}
+	}
+
+	// Record probe count metrics for normal probing
+	if c.metricsCollector != nil {
+		c.metricsCollector.RecordProbeCount(probeCount, "set")
+	}
+
+	// FALLBACK: Max probes reached. Do full table scan to find the key.
+	if c.metricsCollector != nil {
+		c.metricsCollector.RecordFallbackScan(len(c.entries), "set")
+	}
+
+retryFullScan:
+	for retry := 0; retry < 5; retry++ {
+		for i := uint32(0); i < uint32(len(c.entries)); i++ {
+			entry := &c.entries[i]
+			state := atomic.LoadInt32(&entry.valid)
+
+			if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
+				if storedKey := entry.loadKey(); storedKey == key {
+					// Found it! Update in-place
+					if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
+						holder := &valueHolder{}
+						holder.data.Store(value)
+						entry.value.Store(holder)
+						atomic.StoreInt64(&entry.expireAt, expireAt)
+						atomic.StoreInt32(&entry.valid, entryValid)
+						atomic.AddInt64(&c.sets, 1)
+
+						if c.metricsCollector != nil {
+							latency := c.timeProvider.Now() - now
+							c.metricsCollector.RecordSet(latency)
+							c.metricsCollector.RecordKeyAccess(key, "set")
+						}
+						return true
+					}
+					// CAS failed, key exists but someone else is updating it
+					runtime.Gosched()
+					continue retryFullScan
+				}
+			}
+		}
+		break
+	}
+
+	// Key doesn't exist. Try eviction to make space for new insertion.
+	c.evictOne()
+
+	// Retry bounded probing after eviction
+	for i := uint32(0); i <= effectiveMaxProbes; i++ {
+		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
+
+		if c.entries == nil || idx >= uint64(len(c.entries)) {
+			return false
+		}
+
+		entry := &c.entries[idx]
+		state := atomic.LoadInt32(&entry.valid)
+
+		if state == entryPending {
+			continue
+		}
+
+		if state == entryEmpty || state == entryDeleted {
+			if atomic.CompareAndSwapInt32(&entry.valid, state, entryPending) {
+				c.populateEntry(entry, key, keyHash, value, expireAt, state)
+
+				if c.metricsCollector != nil {
+					latency := c.timeProvider.Now() - now
+					c.metricsCollector.RecordSet(latency)
+					c.metricsCollector.RecordKeyAccess(key, "set")
+				}
+
+				duplicatesFound := c.removeDuplicateKeys(key, keyHash, entry)
+
+				if c.metricsCollector != nil && duplicatesFound > 0 {
+					c.metricsCollector.RecordDuplicateCleanup(duplicatesFound)
+				}
 
 				currentSize := atomic.LoadInt64(&c.size)
 				if currentSize > int64(c.maxSize) {
@@ -667,7 +898,7 @@ func (c *wtinyLFUCache) Get(key string) (interface{}, bool) {
 // Delete removes a key using lock-free operations.
 func (c *wtinyLFUCache) Delete(key string) bool {
 	// Validate key is not empty
-	if key == "" {
+	if !c.validateKey(key) {
 		return false
 	}
 
@@ -676,13 +907,10 @@ func (c *wtinyLFUCache) Delete(key string) bool {
 	now := c.timeProvider.Now()
 
 	keyHash := stringHash(key)
-	startIdx := keyHash & uint64(c.tableMask)
+	startIdx := c.calculateStartIndex(keyHash)
 
 	// Calculate effective max probes: min of maxProbeLength and table size
-	effectiveMaxProbes := maxProbeLength
-	if effectiveMaxProbes > c.tableMask {
-		effectiveMaxProbes = c.tableMask
-	}
+	effectiveMaxProbes := c.calculateEffectiveMaxProbes()
 
 	for i := uint32(0); i <= effectiveMaxProbes; i++ {
 		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
@@ -695,7 +923,7 @@ func (c *wtinyLFUCache) Delete(key string) bool {
 		}
 
 		// Skip entries being written/updated
-		if state == entryPending {
+		if c.shouldSkipEntry(state) {
 			continue
 		}
 
@@ -734,7 +962,7 @@ func (c *wtinyLFUCache) Delete(key string) bool {
 // This is more efficient than Get when you only need to check existence.
 func (c *wtinyLFUCache) Has(key string) bool {
 	// Validate key is not empty
-	if key == "" {
+	if !c.validateKey(key) {
 		return false
 	}
 
@@ -743,13 +971,10 @@ func (c *wtinyLFUCache) Has(key string) bool {
 	now := c.timeProvider.Now()
 
 	keyHash := stringHash(key)
-	startIdx := keyHash & uint64(c.tableMask)
+	startIdx := c.calculateStartIndex(keyHash)
 
 	// Calculate effective max probes: min of maxProbeLength and table size
-	effectiveMaxProbes := maxProbeLength
-	if effectiveMaxProbes > c.tableMask {
-		effectiveMaxProbes = c.tableMask
-	}
+	effectiveMaxProbes := c.calculateEffectiveMaxProbes()
 
 	for i := uint32(0); i <= effectiveMaxProbes; i++ {
 		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
@@ -762,7 +987,7 @@ func (c *wtinyLFUCache) Has(key string) bool {
 		}
 
 		// Skip entries being written/updated
-		if state == entryPending {
+		if c.shouldSkipEntry(state) {
 			continue
 		}
 
@@ -996,11 +1221,13 @@ func (c *wtinyLFUCache) Close() error {
 func (c *wtinyLFUCache) evictOne() {
 	tableSize := int(c.tableMask) + 1
 
+	// ===== SAMPLING-BASED EVICTION =====
 	// Try multiple rounds of sampling before giving up
 	for retry := 0; retry < evictionMaxRetries; retry++ {
 		var victim *entry
 		minFrequency := uint64(^uint64(0)) // Max uint64
 
+		// ===== RANDOM SAMPLING SETUP =====
 		// Use true random sampling to prevent adversarial workloads from
 		// exploiting deterministic patterns
 		start := int(c.fastRand() % uint64(tableSize)) // #nosec G115 -- tableSize bounded by maxSize, safe conversion
@@ -1009,6 +1236,7 @@ func (c *wtinyLFUCache) evictOne() {
 			step = 1
 		}
 
+		// ===== FREQUENCY-BASED VICTIM SELECTION =====
 		// Sample entries with random distribution
 		for i := 0; i < evictionSampleSize; i++ {
 			idx := (start + i*step) % tableSize
@@ -1026,6 +1254,7 @@ func (c *wtinyLFUCache) evictOne() {
 			}
 		}
 
+		// ===== ATOMIC VICTIM EVICTION =====
 		// If we found a victim, try to evict it
 		if victim != nil {
 			if atomic.CompareAndSwapInt32(&victim.valid, entryValid, entryDeleted) {
@@ -1044,6 +1273,7 @@ func (c *wtinyLFUCache) evictOne() {
 		}
 	}
 
+	// ===== FALLBACK: LARGER SCAN =====
 	// Last resort: scan a larger portion of the table to ensure we find a victim
 	// In high-load scenarios, we need to be more aggressive
 	scanSize := tableSize / evictionScanRatio // Scan 1/4 of the table
@@ -1054,6 +1284,7 @@ func (c *wtinyLFUCache) evictOne() {
 		scanSize = tableSize
 	}
 
+	// ===== FALLBACK EVICTION =====
 	for i := 0; i < scanSize; i++ {
 		entry := &c.entries[i]
 		state := atomic.LoadInt32(&entry.valid)
@@ -1078,11 +1309,17 @@ func (c *wtinyLFUCache) evictOne() {
 // removeDuplicateKeys removes any duplicate entries for the same key
 // This is a safety mechanism to handle race conditions in concurrent Set operations
 // Uses a limited scan around the hash position for performance
-func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntry *entry) {
+// Returns the number of duplicate entries found and removed
+func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntry *entry) int {
+	// ===== CONFIGURATION =====
 	// CRITICAL FIX for issue #3: Add retry logic to handle state transitions
 	// during high contention. Without retries, CAS failures can leave duplicates.
 	const maxRetries = 3 // Try up to 3 times per entry
 
+	// Track number of duplicates found and removed
+	duplicatesFound := 0
+
+	// ===== SCAN RANGE CALCULATION =====
 	// Scan a limited range around the original hash position
 	startIdx := keyHash & uint64(c.tableMask)
 
@@ -1093,6 +1330,7 @@ func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntr
 		scanRange = c.tableMask
 	}
 
+	// ===== DUPLICATE DETECTION AND REMOVAL =====
 	for i := uint32(0); i < scanRange; i++ {
 		idx := (startIdx + uint64(i)) & uint64(c.tableMask)
 		entry := &c.entries[idx]
@@ -1102,8 +1340,10 @@ func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntr
 			continue
 		}
 
+		// ===== RETRY LOGIC FOR DUPLICATE REMOVAL =====
 		// Try to remove duplicate with retry logic
 		for retry := 0; retry < maxRetries; retry++ {
+			// ===== DUPLICATE IDENTIFICATION =====
 			// Check if this entry has the same key
 			state := atomic.LoadInt32(&entry.valid)
 
@@ -1123,6 +1363,7 @@ func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntr
 				break
 			}
 
+			// ===== ATOMIC DUPLICATE REMOVAL =====
 			// Found a duplicate - try to remove it atomically
 			// CAS from entryValid to entryPending for exclusive access
 			if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
@@ -1135,10 +1376,14 @@ func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntr
 				atomic.AddInt64(&c.size, -1)
 				// Note: we don't increment evictions counter as this is a cleanup operation
 
+				// Count duplicate found and removed
+				duplicatesFound++
+
 				// Successfully removed, break retry loop
 				break
 			}
 
+			// ===== RETRY HANDLING =====
 			// CAS failed - state changed between load and CAS
 			// Retry to check new state (might have been deleted by another thread)
 			// Small yield to reduce contention before retry
@@ -1147,4 +1392,122 @@ func (c *wtinyLFUCache) removeDuplicateKeys(key string, keyHash uint64, keepEntr
 			}
 		}
 	}
+
+	return duplicatesFound
+}
+
+// calculateExpiration calculates the expiration timestamp for a cache entry.
+// This is a pure function that doesn't touch any atomic state.
+//
+// Parameters:
+//   - now: Current timestamp in nanoseconds
+//
+// Returns:
+//   - Expiration timestamp in nanoseconds (0 if TTL is disabled)
+//
+// Performance: ~2ns (single comparison + arithmetic)
+func (c *wtinyLFUCache) calculateExpiration(now int64) int64 {
+	if c.ttlNanos > 0 && now > 0 {
+		// Protect against integer overflow: if now + ttlNanos would overflow,
+		// set expireAt to max int64 (effectively never expires in practice)
+		if now > (1<<63-1)-c.ttlNanos {
+			return 1<<63 - 1 // max int64
+		}
+		return now + c.ttlNanos
+	}
+	return 0
+}
+
+// calculateEffectiveMaxProbes calculates the effective maximum number of probes
+// for linear probing based on cache configuration.
+//
+// Returns:
+//   - Effective max probes (bounded by table size and maxProbeLength)
+//
+// Performance: ~1ns (single comparison)
+func (c *wtinyLFUCache) calculateEffectiveMaxProbes() uint32 {
+	effectiveMaxProbes := maxProbeLength
+	if effectiveMaxProbes > c.tableMask {
+		effectiveMaxProbes = c.tableMask
+	}
+	return effectiveMaxProbes
+}
+
+// calculateStartIndex calculates the starting index for linear probing.
+//
+// Parameters:
+//   - keyHash: Hash of the key
+//
+// Returns:
+//   - Starting index for linear probing
+//
+// Performance: ~1ns (single bitwise operation)
+func (c *wtinyLFUCache) calculateStartIndex(keyHash uint64) uint64 {
+	return keyHash & uint64(c.tableMask)
+}
+
+// validateKey checks if a key is valid for cache operations.
+//
+// Parameters:
+//   - key: The key to validate
+//
+// Returns:
+//   - true if key is valid (non-empty), false otherwise
+//
+// Performance: ~1ns (single length check)
+func (c *wtinyLFUCache) validateKey(key string) bool {
+	return key != ""
+}
+
+// shouldSkipEntry determines if an entry should be skipped during probing.
+//
+// Parameters:
+//   - state: Current entry state
+//
+// Returns:
+//   - true if entry should be skipped, false otherwise
+//
+// Performance: ~1ns (single comparison)
+func (c *wtinyLFUCache) shouldSkipEntry(state int32) bool {
+	return state == entryPending
+}
+
+// isSlotAvailable checks if a slot is available for insertion.
+//
+// Parameters:
+//   - state: Current entry state
+//
+// Returns:
+//   - true if slot is available, false otherwise
+//
+// Performance: ~1ns (single comparison)
+func (c *wtinyLFUCache) isSlotAvailable(state int32) bool {
+	return state == entryEmpty || state == entryDeleted
+}
+
+// attemptExpiredCleanup attempts to clean up an expired entry.
+// This function is safe to call concurrently and only performs cleanup
+// if the entry is actually expired and can be successfully marked as deleted.
+//
+// Parameters:
+//   - entry: The entry to potentially clean up
+//   - now: Current timestamp in nanoseconds
+//
+// Returns:
+//   - true if cleanup was performed, false otherwise
+//
+// Performance: ~5ns (atomic operations + metrics)
+func (c *wtinyLFUCache) attemptExpiredCleanup(entry *entry, now int64) bool {
+	if c.isExpired(entry, now) {
+		if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryDeleted) {
+			entry.storeKey("")
+			atomic.AddInt64(&c.size, -1)
+			atomic.AddInt64(&c.expirations, 1)
+			if c.metricsCollector != nil {
+				c.metricsCollector.RecordExpiration()
+			}
+			return true
+		}
+	}
+	return false
 }

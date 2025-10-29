@@ -30,6 +30,11 @@ type Config struct {
 	// If 0, entries never expire. Default: 0 (no expiration).
 	TTL time.Duration
 
+	// DebugMode enables detailed logging and debugging features.
+	// When enabled, uses the Logger to provide detailed information about cache operations.
+	// Default: false (disabled for performance).
+	DebugMode bool
+
 	// NegativeCacheTTL is the time-to-live for caching loader errors.
 	// When GetOrLoad fails, the error can be cached to prevent repeated
 	// expensive operations that consistently fail.

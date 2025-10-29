@@ -469,15 +469,31 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 	}
 
 	// FALLBACK: If we've probed maxProbeLength slots without finding a spot,
-	// the cache is highly loaded or we hit a large cluster. Evict one entry
-	// to make room, then retry insertion. This guarantees bounded latency.
+	// the cache is highly loaded or we hit a large cluster.
 	//
-	// NOTE: This is extremely rare in practice (< 0.01% of operations even
-	// at 90% load factor). When it happens, it indicates the cache is nearly
-	// full and eviction would happen soon anyway.
-	c.evictOne()
+	// IMPORTANT: Before evicting, check if this is an update to existing key
+	// that we just couldn't find due to clustering. If so, we must NOT evict
+	// because we might remove the very key we're trying to update!
+	//
+	// Do one more full scan to verify the key doesn't exist anywhere.
+	keyExists := false
+	for i := uint32(0); i < uint32(len(c.entries)); i++ {
+		entry := &c.entries[i]
+		state := atomic.LoadInt32(&entry.valid)
+		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
+			if storedKey := entry.loadKey(); storedKey == key {
+				keyExists = true
+				break
+			}
+		}
+	}
 
-	// After eviction, retry the Set operation (should succeed now)
+	// Only evict if this is a new key insertion, not an update
+	if !keyExists {
+		c.evictOne()
+	}
+
+	// After verification/eviction, retry the Set operation (should succeed now)
 	// We don't recurse to avoid stack issues; instead we do one retry inline
 	for i := uint32(0); i <= effectiveMaxProbes; i++ {
 		idx := (startIdx + uint64(i)) & uint64(c.tableMask)

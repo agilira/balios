@@ -471,29 +471,38 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 	// FALLBACK: Max probes reached. Do full table scan to find the key.
 	// Under high contention (100 goroutines updating same key), the key may
 	// exist far beyond maxProbeLength due to concurrent insertions.
-	for i := uint32(0); i < uint32(len(c.entries)); i++ {
-		entry := &c.entries[i]
-		state := atomic.LoadInt32(&entry.valid)
+	for retry := 0; retry < 3; retry++ {
+		for i := uint32(0); i < uint32(len(c.entries)); i++ {
+			entry := &c.entries[i]
+			state := atomic.LoadInt32(&entry.valid)
 
-		if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
-			if storedKey := entry.loadKey(); storedKey == key {
-				// Found it! Update in-place
-				if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
-					holder := &valueHolder{}
-					holder.data.Store(value)
-					entry.value.Store(holder)
-					atomic.StoreInt64(&entry.expireAt, expireAt)
-					atomic.StoreInt32(&entry.valid, entryValid)
-					atomic.AddInt64(&c.sets, 1)
+			if state == entryValid && atomic.LoadUint64(&entry.keyHash) == keyHash {
+				if storedKey := entry.loadKey(); storedKey == key {
+					// Found it! Update in-place
+					if atomic.CompareAndSwapInt32(&entry.valid, entryValid, entryPending) {
+						holder := &valueHolder{}
+						holder.data.Store(value)
+						entry.value.Store(holder)
+						atomic.StoreInt64(&entry.expireAt, expireAt)
+						atomic.StoreInt32(&entry.valid, entryValid)
+						atomic.AddInt64(&c.sets, 1)
 
-					if c.metricsCollector != nil {
-						latency := c.timeProvider.Now() - now
-						c.metricsCollector.RecordSet(latency)
+						if c.metricsCollector != nil {
+							latency := c.timeProvider.Now() - now
+							c.metricsCollector.RecordSet(latency)
+						}
+						return true
 					}
-					return true
+					// CAS failed, key exists but someone else is updating it
+					// Retry the full scan instead of giving up
+					runtime.Gosched() // Yield CPU to the other thread
+					continue
 				}
 			}
 		}
+
+		// Key doesn't exist after full scan - try insertion
+		break
 	}
 
 	// Key doesn't exist. Try eviction to make space for new insertion.

@@ -4,6 +4,7 @@
 // 32-bit and 64-bit architectures, preventing runtime panics.
 //
 // Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

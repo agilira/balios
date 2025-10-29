@@ -4,6 +4,7 @@
 // and that the cache doesn't hold dangling pointers to caller's string data.
 //
 // Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

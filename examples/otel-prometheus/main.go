@@ -20,6 +20,10 @@
 //	Open http://localhost:3000 (Grafana)
 //	Login: admin/admin
 //	Import dashboard from grafana-dashboard.json
+//
+// Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira fragment
+// SPDX-License-Identifier: MPL-2.0
 
 package main
 

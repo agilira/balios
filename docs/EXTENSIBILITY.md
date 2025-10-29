@@ -366,6 +366,4 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
 
 ---
 
-**Copyright © 2025 AGILira - A. Giordano**  
-**Series**: an AGILira fragment  
-**License**: MPL-2.0
+Balios • an AGILira fragment

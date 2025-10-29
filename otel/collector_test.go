@@ -1,3 +1,9 @@
+// collector_test.go: tests for OTel metrics collector integration
+//
+// Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira fragment
+// SPDX-License-Identifier: MPL-2.0
+
 package otel
 
 import (

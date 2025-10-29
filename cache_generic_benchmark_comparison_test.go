@@ -1,7 +1,7 @@
 // cache_generic_benchmark_comparison_test.go: fair comparison between generic and non-generic APIs
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

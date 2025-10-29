@@ -4,7 +4,7 @@
 // and are executed as part of the test suite to ensure they remain valid.
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios_test
@@ -24,7 +24,7 @@ func ExampleNewCache() {
 		MaxSize: 1000,
 		TTL:     time.Hour,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Store a value
 	cache.Set("user:123", map[string]string{
@@ -53,7 +53,7 @@ func ExampleNewGenericCache() {
 		MaxSize: 1000,
 		TTL:     time.Hour,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Store a user (type-safe!)
 	cache.Set("user:123", User{
@@ -75,7 +75,7 @@ func ExampleGenericCache_Set() {
 	cache := balios.NewGenericCache[string, int](balios.Config{
 		MaxSize: 100,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Store multiple values
 	cache.Set("answer", 42)
@@ -95,7 +95,7 @@ func ExampleGenericCache_Get() {
 	cache := balios.NewGenericCache[int, string](balios.Config{
 		MaxSize: 100,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Store a value with integer key
 	cache.Set(404, "Not Found")
@@ -115,7 +115,7 @@ func ExampleCache_GetOrLoad() {
 		MaxSize: 100,
 		TTL:     time.Minute,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Define an expensive loader function
 	expensiveLoader := func() (interface{}, error) {
@@ -146,7 +146,7 @@ func ExampleCache_GetOrLoadWithContext() {
 		MaxSize: 100,
 		TTL:     time.Minute,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Define a loader that respects context cancellation
 	loaderWithContext := func(ctx context.Context) (interface{}, error) {
@@ -177,7 +177,7 @@ func ExampleCache_Stats() {
 	cache := balios.NewCache(balios.Config{
 		MaxSize: 100,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Perform some operations
 	cache.Set("key1", "value1")
@@ -212,7 +212,7 @@ func ExampleConfig() {
 			fmt.Printf("Expired: %s\n", key)
 		},
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	cache.Set("key", "value")
 	// Cache is now configured and ready to use
@@ -224,7 +224,7 @@ func ExampleCache_ExpireNow() {
 		MaxSize: 100,
 		TTL:     100 * time.Millisecond, // Short TTL for demonstration
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Add some entries
 	cache.Set("key1", "value1")
@@ -252,7 +252,7 @@ func ExampleGenericCache_integer_keys() {
 	cache := balios.NewGenericCache[int, string](balios.Config{
 		MaxSize: 100,
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Store HTTP status messages
 	cache.Set(200, "OK")
@@ -274,7 +274,7 @@ func ExampleCache_negative_caching() {
 		TTL:              time.Hour,
 		NegativeCacheTTL: 5 * time.Second, // Cache errors for 5 seconds
 	})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	callCount := 0
 	failingLoader := func() (interface{}, error) {

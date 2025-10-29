@@ -1,7 +1,7 @@
 // race_test.go: comprehensive data race tests for Balios
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

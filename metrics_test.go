@@ -1,7 +1,7 @@
 // metrics_test.go: tests for MetricsCollector interface and implementations
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

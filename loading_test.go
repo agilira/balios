@@ -1,7 +1,7 @@
 // loading_test.go: unit tests for loading functionality in Balios
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

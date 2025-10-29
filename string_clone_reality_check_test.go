@@ -1,6 +1,7 @@
 // string_clone_reality_check_test.go: Verifica l'impatto REALE di strings.Clone()
 //
 // Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

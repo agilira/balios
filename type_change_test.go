@@ -1,7 +1,7 @@
 // type_change_test.go: tests for handling value type changes on same key
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 //
 // REGRESSION TEST for atomic.Value panic bug:

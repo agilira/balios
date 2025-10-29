@@ -4,7 +4,7 @@
 // enabling type-safe cache-aside pattern without type assertions.
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 package balios
 

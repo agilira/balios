@@ -8,7 +8,7 @@
 // This test will fail if the SeqLock protection is accidentally removed.
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 //go:build !race

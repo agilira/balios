@@ -47,6 +47,11 @@
 //
 // All metrics are automatically aggregated by the OTEL SDK and can be exported to
 // any OTEL-compatible backend. Histograms automatically calculate percentiles (p50, p95, p99).
+// bounded_probing_test.go: tests for bounded linear probing improvement (v1.1.35)
+//
+// Copyright (c) 2025 AGILira - A. Giordano
+// Series: an AGILira fragment
+// SPDX-License-Identifier: MPL-2.0
 package otel
 
 import (

@@ -1,7 +1,7 @@
 // memory_overhead_test.go: tests to document memory overhead per cache entry
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

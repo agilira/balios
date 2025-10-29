@@ -1,7 +1,7 @@
 // config_test.go: unit tests for Balios configuration
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios
@@ -253,7 +253,7 @@ func TestNewCache_CallsValidate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cache := NewCache(tt.config)
-			defer cache.Close()
+			defer func() { _ = cache.Close() }()
 
 			// Verify capacity reflects validated MaxSize
 			capacity := cache.Capacity()
@@ -276,7 +276,7 @@ func TestNewCache_CallsValidate(t *testing.T) {
 // when Config fields are nil or zero
 func TestNewCache_ValidateAppliesAllDefaults(t *testing.T) {
 	cache := NewCache(Config{})
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Cache should be created successfully with all defaults
 	if cache == nil {

@@ -1,7 +1,7 @@
 // loading_generic_test.go: type-safe GetOrLoad implementation with generics
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

@@ -1,7 +1,7 @@
 // negative_cache_leak_test.go: tests for negative cache memory leak issue
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

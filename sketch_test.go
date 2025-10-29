@@ -1,7 +1,7 @@
 // sketch_test.go: unit tests and benchmarks for frequency sketch
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

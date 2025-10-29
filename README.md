@@ -8,7 +8,7 @@ Balios is a high-performance in-memory caching library for Go, based on W-TinyLF
 [![CodeQL](https://github.com/agilira/balios/actions/workflows/codeql.yml/badge.svg)](https://github.com/agilira/balios/actions/workflows/codeql.yml)
 [![Security](https://img.shields.io/badge/security-gosec-brightgreen.svg)](https://github.com/agilira/balios/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/agilira/balios)](https://goreportcard.com/report/github.com/agilira/balios)
-[![Test Coverage](https://img.shields.io/badge/coverage-94.4%25-brightgreen)](https://github.com/agilira/balios)
+[![Test Coverage](https://img.shields.io/badge/coverage-94.0%25-brightgreen)](https://github.com/agilira/balios)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11297/badge)](https://www.bestpractices.dev/projects/11297)
 
 **[Features](#features) • [Quick Start](#quick-start) • [Performance](#performance) • [Observability Architecture](#observability-architecture) • [Philosophy](#the-philosophy-behind-balios) • [Documentation](#documentation)**

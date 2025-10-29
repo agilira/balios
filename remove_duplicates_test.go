@@ -1,7 +1,7 @@
 // remove_duplicates_test.go: tests for removal of duplicate keys under contention
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

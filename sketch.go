@@ -1,7 +1,7 @@
 // sketch.go: core lock-free W-TinyLFU cache implementation
 //
 // Copyright (c) 2025 AGILira - A. Giordano
-// Series: an AGILira library
+// Series: an AGILira fragment
 // SPDX-License-Identifier: MPL-2.0
 
 package balios

@@ -1,0 +1,9 @@
+v1.1.36 - 2025-01-29
+
+BUG FIX:
+- Fixed race condition in bounded probing fallback under extreme concurrency
+  - When 100+ goroutines update same key, bounded probing (128 slots) may not find it
+  - Added full table scan before eviction to check if key exists anywhere
+  - If key found beyond probe limit, update in-place instead of evicting
+  - Prevents key loss during high-contention concurrent updates
+  - All security tests now pass including TestSecurity_RaceConditionAttacks

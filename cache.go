@@ -471,7 +471,11 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 	// FALLBACK: Max probes reached. Do full table scan to find the key.
 	// Under high contention (100 goroutines updating same key), the key may
 	// exist far beyond maxProbeLength due to concurrent insertions.
-	for retry := 0; retry < 3; retry++ {
+	//
+	// We retry multiple times if we find the key but CAS fails (extreme contention).
+	// If after retries we still don't find the key, we proceed with eviction + insertion.
+retryFullScan:
+	for retry := 0; retry < 5; retry++ {
 		for i := uint32(0); i < uint32(len(c.entries)); i++ {
 			entry := &c.entries[i]
 			state := atomic.LoadInt32(&entry.valid)
@@ -494,14 +498,14 @@ func (c *wtinyLFUCache) Set(key string, value interface{}) bool {
 						return true
 					}
 					// CAS failed, key exists but someone else is updating it
-					// Retry the full scan instead of giving up
-					runtime.Gosched() // Yield CPU to the other thread
-					continue
+					// Yield and retry the full scan
+					runtime.Gosched()
+					continue retryFullScan
 				}
 			}
 		}
 
-		// Key doesn't exist after full scan - try insertion
+		// Key not found in full scan - break to attempt insertion
 		break
 	}
 

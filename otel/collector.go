@@ -44,6 +44,12 @@
 //   - balios_get_misses_total: Counter of cache misses
 //   - balios_evictions_total: Counter of evictions
 //   - balios_expirations_total: Counter of TTL-based expirations
+//   - balios_probe_count: Histogram of probe counts during linear probing
+//   - balios_fallback_scans_total: Counter of fallback table scans
+//   - balios_duplicate_cleanups_total: Counter of duplicate key cleanups
+//   - balios_race_conditions_total: Counter of race conditions detected
+//   - balios_eviction_sample_size: Histogram of eviction sampling sizes
+//   - balios_memory_pressure: Histogram of memory pressure levels (0-100)
 //
 // All metrics are automatically aggregated by the OTEL SDK and can be exported to
 // any OTEL-compatible backend. Histograms automatically calculate percentiles (p50, p95, p99).
@@ -74,13 +80,19 @@ import (
 // Performance: Minimal overhead (<100ns per operation), allocation-free after initialization.
 type OTelMetricsCollector struct {
 	// OTEL instruments for recording metrics
-	getLatency    metric.Int64Histogram // Get operation latency histogram
-	setLatency    metric.Int64Histogram // Set operation latency histogram
-	deleteLatency metric.Int64Histogram // Delete operation latency histogram
-	hits          metric.Int64Counter   // Cache hits counter
-	misses        metric.Int64Counter   // Cache misses counter
-	evictions     metric.Int64Counter   // Evictions counter
-	expirations   metric.Int64Counter   // Expirations counter
+	getLatency        metric.Int64Histogram // Get operation latency histogram
+	setLatency        metric.Int64Histogram // Set operation latency histogram
+	deleteLatency     metric.Int64Histogram // Delete operation latency histogram
+	hits              metric.Int64Counter   // Cache hits counter
+	misses            metric.Int64Counter   // Cache misses counter
+	evictions         metric.Int64Counter   // Evictions counter
+	expirations       metric.Int64Counter   // Expirations counter
+	probeCount        metric.Int64Histogram // Probe count histogram
+	fallbackScans     metric.Int64Counter   // Fallback scan counter
+	duplicateCleanups metric.Int64Counter   // Duplicate cleanup counter
+	raceConditions    metric.Int64Counter   // Race condition counter
+	evictionSamples   metric.Int64Histogram // Eviction sampling histogram
+	memoryPressure    metric.Int64Histogram // Memory pressure histogram
 }
 
 // Options for configuring OTelMetricsCollector.
@@ -212,6 +224,60 @@ func NewOTelMetricsCollector(provider metric.MeterProvider, opts ...Option) (*OT
 		return nil, err
 	}
 
+	// Create probe count histogram
+	collector.probeCount, err = meter.Int64Histogram(
+		"balios_probe_count",
+		metric.WithDescription("Number of probes during operations"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create fallback scans counter
+	collector.fallbackScans, err = meter.Int64Counter(
+		"balios_fallback_scans_total",
+		metric.WithDescription("Total number of fallback scans"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create duplicate cleanups counter
+	collector.duplicateCleanups, err = meter.Int64Counter(
+		"balios_duplicate_cleanups_total",
+		metric.WithDescription("Total number of duplicate key cleanups"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create race conditions counter
+	collector.raceConditions, err = meter.Int64Counter(
+		"balios_race_conditions_total",
+		metric.WithDescription("Total number of race conditions detected"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create eviction samples histogram
+	collector.evictionSamples, err = meter.Int64Histogram(
+		"balios_eviction_sample_size",
+		metric.WithDescription("Eviction sampling size"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create memory pressure histogram
+	collector.memoryPressure, err = meter.Int64Histogram(
+		"balios_memory_pressure",
+		metric.WithDescription("Memory pressure level (0-100)"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return collector, nil
 }
 
@@ -285,6 +351,121 @@ func (c *OTelMetricsCollector) RecordEviction() {
 // Performance: ~50-100ns overhead, allocation-free.
 func (c *OTelMetricsCollector) RecordExpiration() {
 	c.expirations.Add(context.Background(), 1)
+}
+
+// RecordProbeCount records the number of probes performed during an operation.
+//
+// Parameters:
+//   - probeCount: Number of slots checked during linear probing. Must be >= 0.
+//   - operation: Type of operation ("get", "set", "delete", "has").
+//
+// This method records the probe count to a histogram for percentile analysis.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~50-100ns overhead, allocation-free.
+func (c *OTelMetricsCollector) RecordProbeCount(probeCount int, operation string) {
+	c.probeCount.Record(context.Background(), int64(probeCount))
+}
+
+// RecordFallbackScan records when a fallback to full table scan is performed.
+//
+// Parameters:
+//   - scanSize: Number of entries scanned. Must be >= 0.
+//   - operation: Type of operation where the scan occurred.
+//
+// This method increments the fallback scans counter.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~50-100ns overhead, allocation-free.
+func (c *OTelMetricsCollector) RecordFallbackScan(scanSize int, operation string) {
+	c.fallbackScans.Add(context.Background(), 1)
+}
+
+// RecordDuplicateCleanup records when duplicate key cleanup is performed.
+//
+// Parameters:
+//   - duplicatesFound: Number of duplicate entries found and removed. Must be >= 0.
+//
+// This method increments the duplicate cleanups counter.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~50-100ns overhead, allocation-free.
+func (c *OTelMetricsCollector) RecordDuplicateCleanup(duplicatesFound int) {
+	c.duplicateCleanups.Add(context.Background(), int64(duplicatesFound))
+}
+
+// RecordRaceCondition records when a race condition is detected and handled.
+//
+// Parameters:
+//   - operation: Type of operation where the race occurred.
+//
+// This method increments the race conditions counter.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~50-100ns overhead, allocation-free.
+func (c *OTelMetricsCollector) RecordRaceCondition(operation string) {
+	c.raceConditions.Add(context.Background(), 1)
+}
+
+// RecordEvictionSampling records eviction sampling statistics.
+//
+// Parameters:
+//   - sampleSize: Number of entries sampled. Must be >= 0.
+//   - victimFound: Whether a victim was found in the sample.
+//
+// This method records the sample size to a histogram.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~50-100ns overhead, allocation-free.
+func (c *OTelMetricsCollector) RecordEvictionSampling(sampleSize int, victimFound bool) {
+	c.evictionSamples.Record(context.Background(), int64(sampleSize))
+}
+
+// RecordMemoryPressure records memory pressure events.
+//
+// Parameters:
+//   - pressureLevel: Value from 0-100 indicating memory pressure level.
+//
+// This method records the pressure level to a histogram.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~50-100ns overhead, allocation-free.
+func (c *OTelMetricsCollector) RecordMemoryPressure(pressureLevel int) {
+	c.memoryPressure.Record(context.Background(), int64(pressureLevel))
+}
+
+// RecordKeyAccess records access to a specific key for analytics.
+//
+// Parameters:
+//   - key: The cache key.
+//   - operation: Type of operation ("get", "set", "delete", "has").
+//
+// Note: This method is a no-op in the basic implementation to avoid
+// excessive cardinality in metrics. For per-key analytics, consider
+// using a sampling approach or a separate analytics system.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~1ns overhead (no-op), allocation-free.
+func (c *OTelMetricsCollector) RecordKeyAccess(key string, operation string) {
+	// No-op: Per-key metrics can cause cardinality explosion in OTEL.
+	// Users can implement custom collectors if needed.
+}
+
+// RecordKeyFrequency records the frequency of a key for analytics.
+//
+// Parameters:
+//   - key: The cache key.
+//   - frequency: Current frequency count.
+//
+// Note: This method is a no-op in the basic implementation to avoid
+// excessive cardinality in metrics. For per-key analytics, consider
+// using a sampling approach or a separate analytics system.
+//
+// Thread-safety: Safe for concurrent use.
+// Performance: ~1ns overhead (no-op), allocation-free.
+func (c *OTelMetricsCollector) RecordKeyFrequency(key string, frequency uint64) {
+	// No-op: Per-key metrics can cause cardinality explosion in OTEL.
+	// Users can implement custom collectors if needed.
 }
 
 // Compile-time interface check

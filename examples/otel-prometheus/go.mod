@@ -1,18 +1,18 @@
 module example-otel-prometheus
 
-go 1.25
+go 1.25.9
 
 require (
 	github.com/agilira/balios v0.0.0
 	github.com/agilira/balios/otel v0.0.0
 	github.com/prometheus/client_golang v1.20.4
 	go.opentelemetry.io/otel/exporters/prometheus v0.53.0
-	go.opentelemetry.io/otel/sdk/metric v1.40.0
+	go.opentelemetry.io/otel/sdk/metric v1.43.0
 )
 
 require (
-	github.com/agilira/go-errors v1.1.1 // indirect
-	github.com/agilira/go-timecache v1.0.2 // indirect
+	github.com/agilira/go-errors v1.1.2 // indirect
+	github.com/agilira/go-timecache v1.0.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -24,11 +24,11 @@ require (
 	github.com/prometheus/common v0.60.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/otel v1.40.0 // indirect
-	go.opentelemetry.io/otel/metric v1.40.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.40.0 // indirect
-	go.opentelemetry.io/otel/trace v1.40.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	go.opentelemetry.io/otel v1.43.0 // indirect
+	go.opentelemetry.io/otel/metric v1.43.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.43.0 // indirect
+	go.opentelemetry.io/otel/trace v1.43.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	google.golang.org/protobuf v1.35.1 // indirect
 )
 
